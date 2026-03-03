@@ -92,3 +92,5 @@ mobile_app/android/app/google-services.json
 # ==============================
 .DS_Store
 Thumbs.db
+
+test.html
