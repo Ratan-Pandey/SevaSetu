@@ -1,0 +1,39 @@
+name: admin_dashboard
+description: Grievance Intelligence System - Admin Dashboard
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  cupertino_icons: ^1.0.6
+  
+  # HTTP
+  http: ^1.2.0
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Storage
+  shared_preferences: ^2.2.2
+  
+  # UI Components
+  intl: ^0.20.2
+  
+  # Charts
+  fl_chart: ^0.66.0
+  
+  # Data Tables
+  data_table_2: ^2.5.12
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
