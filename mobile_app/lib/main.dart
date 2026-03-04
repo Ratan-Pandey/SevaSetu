@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
+import 'services/notification_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -26,6 +27,7 @@ class GrievanceApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         Provider(create: (_) => ApiService()),
+        Provider(create: (_) => NotificationService()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

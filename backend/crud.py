@@ -83,7 +83,8 @@ def create_officer(db: Session, email: str, password: str, name: str,
 # ===== COMPLAINT CRUD =====
 
 def create_complaint(db: Session, user_id: int, text: str, selected_department: str,
-                    ai_result: dict) -> Complaint:
+                    ai_result: dict, latitude: float = None, longitude: float = None,
+                    location_address: str = None) -> Complaint:
     """Create new complaint with AI predictions"""
     tracking_id = generate_tracking_id()
     
@@ -98,7 +99,10 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
         delay_risk_label=ai_result.get('delay_risk_label'),
         delay_risk_score=ai_result.get('delay_risk_score'),
         final_department=ai_result.get('department'),
-        status='submitted'
+        status='submitted',
+        latitude=latitude,
+        longitude=longitude,
+        location_address=location_address
     )
     db.add(complaint)
     db.flush()  # Get complaint.id

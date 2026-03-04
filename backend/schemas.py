@@ -68,6 +68,9 @@ class ComplaintSubmit(BaseModel):
     """Submit new complaint"""
     text: str
     selected_department: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_address: Optional[str] = None
 
 
 class ComplaintResponse(BaseModel):
@@ -82,6 +85,9 @@ class ComplaintResponse(BaseModel):
     delay_risk_label: Optional[str]
     delay_risk_score: Optional[float]
     status: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_address: Optional[str] = None
     created_at: datetime
 
 
@@ -97,6 +103,9 @@ class ComplaintDetail(BaseModel):
     delay_risk_score: Optional[float]
     status: str
     assigned_officer_name: Optional[str]
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_address: Optional[str] = None
     created_at: datetime
     updates: list
 

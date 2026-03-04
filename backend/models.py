@@ -37,6 +37,7 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     profile_completed = Column(Boolean, default=False)
+    fcm_token = Column(String(255), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -92,6 +93,10 @@ class Complaint(Base):
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    image_path = Column(String(255), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    location_address = Column(String, nullable=True)
     
     # Complaint content (English only for now)
     text = Column(Text, nullable=False)

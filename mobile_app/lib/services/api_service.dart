@@ -56,16 +56,24 @@ class ApiService {
   Future<Map<String, dynamic>?> submitComplaint(
     int userId,
     String text,
-    String selectedDepartment,
-  ) async {
+    String selectedDepartment, {
+    double? latitude,
+    double? longitude,
+    String? locationAddress,
+  }) async {
     try {
+      final body = {
+        'text': text,
+        'selected_department': selectedDepartment,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (locationAddress != null) 'location_address': locationAddress,
+      };
+      
       final response = await http.post(
         Uri.parse('$baseUrl/complaints/submit?user_id=$userId'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'text': text,
-          'selected_department': selectedDepartment,
-        }),
+        body: jsonEncode(body),
       );
 
       if (response.statusCode == 200) {
