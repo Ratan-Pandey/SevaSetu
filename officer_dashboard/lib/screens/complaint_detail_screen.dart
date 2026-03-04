@@ -227,6 +227,81 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // Image Evidence
+                      if (_data!['complaint']['image_path'] != null &&
+                          _data!['complaint']['image_path'].toString().isNotEmpty)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Photo Evidence',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    'http://10.0.2.2:8000/${_data!['complaint']['image_path']}',
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Container(
+                                          height: 150,
+                                          color: Colors.grey.shade200,
+                                          child: const Center(child: Text('Image not available')),
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (_data!['complaint']['image_path'] != null &&
+                          _data!['complaint']['image_path'].toString().isNotEmpty)
+                        const SizedBox(height: 16),
+
+                      // Location Info
+                      if (_data!['complaint']['location_address'] != null &&
+                          _data!['complaint']['location_address'].toString().isNotEmpty)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Location',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on, color: Colors.red, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(_data!['complaint']['location_address']),
+                                    ),
+                                  ],
+                                ),
+                                if (_data!['complaint']['latitude'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      'Coordinates: ${_data!['complaint']['latitude']}, ${_data!['complaint']['longitude']}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (_data!['complaint']['location_address'] != null &&
+                          _data!['complaint']['location_address'].toString().isNotEmpty)
+                        const SizedBox(height: 16),
+
                       // Actions
                       if (_data!['assigned_officer'] == null)
                         ElevatedButton(

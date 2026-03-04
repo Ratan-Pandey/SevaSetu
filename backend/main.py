@@ -15,6 +15,16 @@ import schemas
 import crud
 from firebase_config import initialize_firebase, verify_token
 from ai.analyze_complaint import analyze_complaint
+from fastapi import File, UploadFile
+from fastapi.staticfiles import StaticFiles
+import shutil
+import time
+from models import Complaint, User
+import firebase_admin
+from firebase_admin import credentials, messaging
+import aiosmtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Initialize Firebase
 try:
@@ -29,6 +39,44 @@ app = FastAPI(
     description="AI-powered complaint system with Firebase auth",
     version="3.0.0"
 )
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Initialize Firebase Admin
+try:
+    cred = credentials.Certificate("firebase-service-account.json")
+    firebase_admin.initialize_app(cred)
+    print("✅ Firebase Admin initialized")
+except Exception as e:
+    print(f"⚠️ Firebase Admin init failed: {e}")
+
+# Email settings (use Gmail for testing)
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USER = "ratanpandey822@gmail.com"  # Using provided email from previous context if available, otherwise placeholder
+EMAIL_PASSWORD = "your-app-password"  # USER will need to update this
+
+async def send_email(to_email: str, subject: str, body: str):
+    """Send async email via SMTP"""
+    try:
+        message = MIMEMultipart()
+        message["From"] = EMAIL_USER
+        message["To"] = to_email
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "html"))
+
+        await aiosmtplib.send(
+            message,
+            hostname=EMAIL_HOST,
+            port=EMAIL_PORT,
+            username=EMAIL_USER,
+            password=EMAIL_PASSWORD,
+            start_tls=True,
+        )
+        print(f"✅ Email sent to {to_email}")
+    except Exception as e:
+        print(f"❌ Email error: {e}")
 
 # CORS middleware
 app.add_middleware(
@@ -149,7 +197,7 @@ def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session
 # ===== COMPLAINT ROUTES =====
 
 @app.post("/complaints/submit", response_model=schemas.ComplaintResponse)
-def submit_complaint(
+async def submit_complaint(
     complaint: schemas.ComplaintSubmit,
     user_id: int,
     db: Session = Depends(get_db)
@@ -165,7 +213,10 @@ def submit_complaint(
         user_id=user_id,
         text=complaint.text,
         selected_department=complaint.selected_department,
-        ai_result=ai_result
+        ai_result=ai_result,
+        latitude=complaint.latitude,
+        longitude=complaint.longitude,
+        location_address=complaint.location_address
     )
     
     # Create notification for user
@@ -180,7 +231,70 @@ def submit_complaint(
     db.add(notification)
     db.commit()
     
+    # Send Push Notification
+    if new_complaint.user_id:
+        user = db.query(models.User).filter(models.User.id == new_complaint.user_id).first()
+        if user and user.fcm_token:
+            send_push_notification(
+                user.fcm_token,
+                "Complaint Submitted",
+                f"Your complaint {new_complaint.tracking_id} has been registered"
+            )
+    
+    # Send Email Notification
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user and user.email:
+        await send_email(
+            user.email,
+            "Complaint Submitted Successfully",
+            f"""
+            <h2>Dear {user.name},</h2>
+            <p>Your complaint has been successfully submitted.</p>
+            <p><strong>Tracking ID:</strong> {new_complaint.tracking_id}</p>
+            <p><strong>Department:</strong> {new_complaint.selected_department}</p>
+            <p><strong>Category:</strong> {new_complaint.ai_category}</p>
+            <p><strong>Urgency:</strong> {new_complaint.ai_urgency}</p>
+            <p>You will receive updates via email.</p>
+            <br>
+            <p>Thank you for using Grievance Intelligence System.</p>
+            """
+        )
+    
     return new_complaint
+
+
+@app.post("/complaints/{complaint_id}/upload-image")
+async def upload_complaint_image(
+    complaint_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload image for a complaint"""
+    try:
+        complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Complaint not found")
+        
+        # Create filename
+        file_extension = file.filename.split('.')[-1]
+        file_name = f"complaint_{complaint_id}_{int(time.time())}.{file_extension}"
+        file_path = f"static/complaint_images/{file_name}"
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update database
+        complaint.image_path = file_path
+        db.commit()
+        
+        return {
+            "message": "Image uploaded successfully",
+            "image_path": file_path,
+            "image_url": f"/{file_path}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/complaints/my/{user_id}")
@@ -280,7 +394,7 @@ def assign_to_me(complaint_id: int, officer_id: int, db: Session = Depends(get_d
 
 
 @app.put("/officer/complaints/{complaint_id}/update")
-def update_status(
+async def update_status(
     complaint_id: int,
     officer_id: int,
     update: schemas.ComplaintUpdateRequest,
@@ -296,6 +410,25 @@ def update_status(
         new_status=new_status,
         update_text=update.update_text
     )
+    
+    # Send Email Notification
+    complaint = db.query(models.Complaint).filter(models.Complaint.id == complaint_id).first()
+    if complaint and complaint.user_id:
+        user = db.query(models.User).filter(models.User.id == complaint.user_id).first()
+        if user and user.email:
+            await send_email(
+                user.email,
+                f"Complaint {complaint.tracking_id} Updated",
+                f"""
+                <h2>Dear {user.name},</h2>
+                <p>Your complaint has been updated.</p>
+                <p><strong>Tracking ID:</strong> {complaint.tracking_id}</p>
+                <p><strong>New Status:</strong> {new_status}</p>
+                <p><strong>Update:</strong> {update.update_text}</p>
+                <br>
+                <p>Thank you for your patience.</p>
+                """
+            )
     
     return {"message": "Complaint updated successfully", "update": update_record}
 
@@ -395,6 +528,32 @@ def get_all_officers(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 def get_all_complaints(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Return all complaints (not filtered by officer)"""
     return crud.get_all_complaints(db, skip, limit)
+
+
+# ===== FCM ENDPOINTS =====
+
+@app.post("/user/{user_id}/fcm-token")
+async def save_fcm_token(user_id: int, token: dict, db: Session = Depends(get_db)):
+    """Save user's FCM token for push notifications"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.fcm_token = token.get('token')
+        db.commit()
+        return {"message": "FCM token saved"}
+    raise HTTPException(status_code=404, detail="User not found")
+
+
+def send_push_notification(fcm_token: str, title: str, body: str):
+    """Send push notification via Firebase Admin SDK"""
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(title=title, body=body),
+            token=fcm_token,
+        )
+        messaging.send(message)
+        print(f"🚀 Push notification sent to {fcm_token[:10]}...")
+    except Exception as e:
+        print(f"❌ Push notification error: {e}")
 
 
 # Run with: python -m uvicorn main:app --reload

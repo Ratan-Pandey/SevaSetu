@@ -3,6 +3,11 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import 'complaint_success_screen.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:http_parser/http_parser.dart';
+import 'package:http/http.dart' as http;
+import '../../services/location_service.dart';
 
 class ComplaintFormScreen extends StatefulWidget {
   final String department;
@@ -17,6 +22,62 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _complaintController = TextEditingController();
   bool _isSubmitting = false;
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
+  Map<String, dynamic>? _locationData;
+  bool _fetchingLocation = false;
+
+  Future<void> _getLocation() async {
+    setState(() => _fetchingLocation = true);
+    final locationService = LocationService();
+    final location = await locationService.getCurrentLocation();
+    if (mounted) {
+      setState(() {
+        _locationData = location;
+        _fetchingLocation = false;
+      });
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        setState(() => _selectedImage = File(image.path));
+      }
+    } catch (e) {
+      print('Image picker error: $e');
+    }
+  }
+
+  Future<bool> _uploadImage(int complaintId) async {
+    if (_selectedImage == null) return true;
+    
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://127.0.0.1:8000/complaints/$complaintId/upload-image'),
+      );
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'file', 
+        _selectedImage!.path,
+        contentType: MediaType('image', 'jpeg'), // Best effort for common images
+      ));
+      
+      final response = await request.send();
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Upload error: $e');
+      return false;
+    }
+  }
 
   Future<void> _submitComplaint() async {
     if (!_formKey.currentState!.validate()) return;
@@ -39,11 +100,19 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
       userId,
       _complaintController.text.trim(),
       widget.department,
+      latitude: _locationData?['latitude'],
+      longitude: _locationData?['longitude'],
+      locationAddress: _locationData?['address'],
     );
 
     if (!mounted) return;
 
     if (result != null) {
+      // Upload image if selected
+      if (_selectedImage != null) {
+        await _uploadImage(result['id']);
+      }
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -288,15 +357,118 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Character count
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            '${_complaintController.text.length}/500 characters',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
+                        // Image Selection UI
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Add Photo Evidence (Optional)', 
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 12),
+                              if (_selectedImage != null) ...[
+                                Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(_selectedImage!, 
+                                        height: 200, width: double.infinity, fit: BoxFit.cover),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: CircleAvatar(
+                                        backgroundColor: Colors.white,
+                                        child: IconButton(
+                                          onPressed: () => setState(() => _selectedImage = null),
+                                          icon: const Icon(Icons.delete, color: Colors.red),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _pickImage(ImageSource.gallery),
+                                        icon: const Icon(Icons.photo_library),
+                                        label: const Text('Gallery'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.blue,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _pickImage(ImageSource.camera),
+                                        icon: const Icon(Icons.camera_alt),
+                                        label: const Text('Camera'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.blue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Location Selection UI
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Location (Optional)', 
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 12),
+                              if (_locationData != null) ...[
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on, color: Colors.blue, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _locationData!['address'],
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                TextButton.icon(
+                                  onPressed: () => setState(() => _locationData = null),
+                                  icon: const Icon(Icons.delete),
+                                  label: const Text('Remove'),
+                                ),
+                              ] else ...[
+                                ElevatedButton.icon(
+                                  onPressed: _fetchingLocation ? null : _getLocation,
+                                  icon: _fetchingLocation
+                                      ? const SizedBox(width: 16, height: 16, 
+                                          child: CircularProgressIndicator(strokeWidth: 2))
+                                      : const Icon(Icons.my_location),
+                                  label: Text(_fetchingLocation ? 'Getting location...' : 'Get Current Location'),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         const SizedBox(height: 24),

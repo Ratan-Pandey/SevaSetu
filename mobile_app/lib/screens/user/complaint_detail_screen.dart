@@ -229,6 +229,120 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                   ),
                                   const SizedBox(height: 20),
 
+                                  // Image Evidence
+                                  if (_data!['complaint']['image_path'] != null &&
+                                      _data!['complaint']['image_path'].toString().isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.grey.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: const [
+                                              Icon(Icons.image, color: Color(0xFF667eea)),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                'Photo Evidence',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Image.network(
+                                              'http://10.0.2.2:8000/${_data!['complaint']['image_path']}',
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                  Container(
+                                                    height: 150,
+                                                    color: Colors.grey.shade200,
+                                                    child: const Center(child: Text('Image not available')),
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  if (_data!['complaint']['image_path'] != null &&
+                                      _data!['complaint']['image_path'].toString().isNotEmpty)
+                                    const SizedBox(height: 20),
+
+                                  // Location Info
+                                  if (_data!['complaint']['location_address'] != null &&
+                                      _data!['complaint']['location_address'].toString().isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.grey.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: const [
+                                              Icon(Icons.location_on, color: Color(0xFF667eea)),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                'Location',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.place, color: Colors.red, size: 20),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  _data!['complaint']['location_address'],
+                                                  style: const TextStyle(fontSize: 14, height: 1.5),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (_data!['complaint']['latitude'] != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 8),
+                                              child: Text(
+                                                'Coordinates: ${_data!['complaint']['latitude']}, ${_data!['complaint']['longitude']}',
+                                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  if (_data!['complaint']['location_address'] != null &&
+                                      _data!['complaint']['location_address'].toString().isNotEmpty)
+                                    const SizedBox(height: 20),
+
                                   // Updates Timeline
                                   if (_data!['updates'] != null && 
                                       (_data!['updates'] as List).isNotEmpty) ...[

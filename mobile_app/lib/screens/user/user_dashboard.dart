@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
@@ -6,6 +7,7 @@ import 'department_selection_screen.dart';
 import 'my_complaints_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
+import '../../services/notification_service.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -16,6 +18,7 @@ class UserDashboard extends StatefulWidget {
 
 class _UserDashboardState extends State<UserDashboard> {
   int _currentIndex = 0;
+  Timer? _refreshTimer;
   
   final List<Widget> _screens = [
     const DashboardHome(),
@@ -91,6 +94,29 @@ class _DashboardHomeState extends State<DashboardHome> {
   void initState() {
     super.initState();
     _loadStats();
+    _initNotifications();
+    
+    // Auto-refresh every 10 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _loadStats();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initNotifications() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final apiService = Provider.of<ApiService>(context, listen: false);
+    final notificationService = Provider.of<NotificationService>(context, listen: false);
+    
+    final userId = authService.getUserId();
+    if (userId != null) {
+      await notificationService.initialize(userId, apiService);
+    }
   }
 
   Future<void> _loadStats() async {
