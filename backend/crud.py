@@ -216,3 +216,49 @@ def get_unread_count(db: Session, user_id: int) -> int:
     return db.query(Notification).filter(
         and_(Notification.user_id == user_id, Notification.is_read == False)
     ).count()
+
+
+# ===== ADMIN CRUD =====
+
+def get_all_users(db: Session, skip: int = 0, limit: int = 100):
+    """Get all registered users"""
+    return db.query(User).offset(skip).limit(limit).all()
+
+
+def get_all_officers(db: Session, skip: int = 0, limit: int = 100):
+    """Get all government officers"""
+    return db.query(Officer).offset(skip).limit(limit).all()
+
+
+def get_all_complaints(db: Session, skip: int = 0, limit: int = 100):
+    """Get all complaints system-wide"""
+    return db.query(Complaint).order_by(Complaint.created_at.desc()).offset(skip).limit(limit).all()
+
+
+def get_system_analytics(db: Session):
+    """Calculate system-wide statistics"""
+    from sqlalchemy import func
+    
+    total_users = db.query(User).count()
+    total_officers = db.query(Officer).count()
+    total_complaints = db.query(Complaint).count()
+    
+    # Status breakdown
+    status_counts = db.query(Complaint.status, func.count(Complaint.status)).group_by(Complaint.status).all()
+    status_dict = {status: count for status, count in status_counts}
+    
+    # Department breakdown
+    dept_counts = db.query(Complaint.final_department, func.count(Complaint.final_department)).group_by(Complaint.final_department).all()
+    dept_dict = {dept: count for dept, count in dept_counts if dept}
+    
+    # Urgency breakdown
+    high_urgency = db.query(Complaint).filter(Complaint.ai_urgency == 'High').count()
+    
+    return {
+        "total_users": total_users,
+        "total_officers": total_officers,
+        "total_complaints": total_complaints,
+        "complaints_by_status": status_dict,
+        "complaints_by_department": dept_dict,
+        "high_urgency_count": high_urgency
+    }

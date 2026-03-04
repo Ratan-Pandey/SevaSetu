@@ -347,6 +347,56 @@ def analytics_summary(db: Session = Depends(get_db)):
     }
 
 
+# ===== ADMIN ROUTES =====
+
+@app.post("/auth/admin/login", response_model=schemas.AuthResponse)
+def admin_login(request: schemas.AdminLoginRequest, db: Session = Depends(get_db)):
+    """
+    Admin login (currently using officer table)
+    """
+    # For now, we use the officer table for admin access
+    # In a real system, there would be an 'is_admin' flag or a separate table
+    officer = crud.get_officer_by_email(db, request.email)
+    
+    if not officer or not crud.verify_officer_password(request.password, officer.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin credentials"
+        )
+    
+    return schemas.AuthResponse(
+        user_id=officer.id,
+        email=officer.email,
+        name=officer.name,
+        role='admin',  # Hardcoded role for this endpoint
+        department=officer.department
+    )
+
+
+@app.get("/admin/analytics/system", response_model=schemas.SystemAnalyticsResponse)
+def get_system_analytics(db: Session = Depends(get_db)):
+    """Return system-wide stats"""
+    return crud.get_system_analytics(db)
+
+
+@app.get("/admin/users")
+def get_all_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Return all users"""
+    return crud.get_all_users(db, skip, limit)
+
+
+@app.get("/admin/officers")
+def get_all_officers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Return all officers"""
+    return crud.get_all_officers(db, skip, limit)
+
+
+@app.get("/admin/complaints/all")
+def get_all_complaints(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Return all complaints (not filtered by officer)"""
+    return crud.get_all_complaints(db, skip, limit)
+
+
 # Run with: python -m uvicorn main:app --reload
 if __name__ == "__main__":
     import uvicorn

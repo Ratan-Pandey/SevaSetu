@@ -19,6 +19,12 @@ class OfficerLoginRequest(BaseModel):
     password: str
 
 
+class AdminLoginRequest(BaseModel):
+    """Admin login (uses same structure as officer for now)"""
+    email: EmailStr
+    password: str
+
+
 class AuthResponse(BaseModel):
     """Authentication response"""
     user_id: int
@@ -110,6 +116,16 @@ class OfficerDashboardStats(BaseModel):
     pending: int
     in_progress: int
     resolved: int
+
+
+class SystemAnalyticsResponse(BaseModel):
+    """System-wide analytics"""
+    total_users: int
+    total_officers: int
+    total_complaints: int
+    complaints_by_status: dict
+    complaints_by_department: dict
+    high_urgency_count: int
 
 
 # ===== NOTIFICATION SCHEMAS =====
