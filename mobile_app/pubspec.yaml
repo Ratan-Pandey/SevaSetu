@@ -1,5 +1,5 @@
 name: Seva_Setu
-description: AI-Powered Grievance Intelligence System - User Mobile App
+description: AI-Powered Grievance Intelligence System - User Mobile App (Phase 4 Complete)
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -7,14 +7,9 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  socket_io_client: ^2.0.3+1
   flutter:
     sdk: flutter
-  record: ^5.0.4
-  audioplayers: ^5.2.1
-  permission_handler: ^11.2.0
-  path_provider: ^2.1.2  
-
+  
   cupertino_icons: ^1.0.6
 
   # Firebase (Latest Stable Compatible Set)
@@ -25,11 +20,23 @@ dependencies:
 
   # HTTP & API
   http: ^1.2.0
+  http_parser: ^4.0.2
+
+  # Phase 4: Image Upload
   image_picker: ^1.0.7
+
+  # Phase 4: Location Tracking
   geolocator: ^11.0.0
   geocoding: ^3.0.0
-  http_parser: ^4.0.2
-  socket_io_client: ^2.0.3
+
+  # Phase 4: Audio Complaints
+  record: ^5.0.4
+  audioplayers: ^5.2.1
+  permission_handler: ^11.2.0
+  path_provider: ^2.1.2
+
+  # Phase 4: Real-time Chat
+  socket_io_client: ^2.0.3+1
 
   # State Management
   provider: ^6.1.1
