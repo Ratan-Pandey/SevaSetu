@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import 'package:intl/intl.dart';
+import 'chat_screen.dart';
+import 'rating_dialog.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class ComplaintDetailScreen extends StatefulWidget {
   final int complaintId;
@@ -15,11 +19,28 @@ class ComplaintDetailScreen extends StatefulWidget {
 class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   Map<String, dynamic>? _data;
   bool _isLoading = true;
+  int _selectedRating = 0;
+  final _feedbackController = TextEditingController();
+  
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _loadDetail();
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
+    });
+    _audioPlayer.onDurationChanged.listen((newDuration) {
+      if (mounted) setState(() => _duration = newDuration);
+    });
+    _audioPlayer.onPositionChanged.listen((newPosition) {
+      if (mounted) setState(() => _position = newPosition);
+    });
   }
 
   Future<void> _loadDetail() async {
@@ -229,6 +250,130 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                   ),
                                   const SizedBox(height: 20),
 
+                                  // Chat with Officer Button (if assigned)
+                                  if (_data!['assigned_officer'] != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 20),
+                                      child: Container(
+                                        width: double.infinity,
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF667eea).withOpacity(0.3),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => ChatScreen(
+                                                  complaintId: widget.complaintId,
+                                                  trackingId: _data!['complaint']['tracking_id'],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.chat_bubble, color: Colors.white),
+                                          label: const Text(
+                                            'Chat with Officer',
+                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Audio Evidence
+                                  if (_data!['complaint']['audio_path'] != null) ...[
+                                    Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: Colors.red.shade200),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: const [
+                                              Icon(Icons.mic, color: Colors.red),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                'Voice Recording',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                IconButton(
+                                                  icon: Icon(
+                                                    _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                                    color: Colors.red,
+                                                    size: 36,
+                                                  ),
+                                                  onPressed: () async {
+                                                    if (_isPlaying) {
+                                                      await _audioPlayer.pause();
+                                                    } else {
+                                                      final url = 'http://127.0.0.1:8000/${_data!['complaint']['audio_path']}';
+                                                      await _audioPlayer.play(UrlSource(url));
+                                                    }
+                                                  },
+                                                ),
+                                                Expanded(
+                                                  child: Slider(
+                                                    activeColor: Colors.red,
+                                                    inactiveColor: Colors.red.shade100,
+                                                    min: 0,
+                                                    max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1,
+                                                    value: _position.inSeconds.toDouble().clamp(0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1),
+                                                    onChanged: (value) async {
+                                                      final position = Duration(seconds: value.toInt());
+                                                      await _audioPlayer.seek(position);
+                                                    },
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '${_position.toString().split('.')[0].padLeft(8, '0').substring(3)} / '
+                                                  '${_duration.toString().split('.')[0].padLeft(8, '0').substring(3)}',
+                                                  style: const TextStyle(fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
+
                                   // Image Evidence
                                   if (_data!['complaint']['image_path'] != null &&
                                       _data!['complaint']['image_path'].toString().isNotEmpty)
@@ -423,6 +568,72 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                     ),
                                   ],
                                   const SizedBox(height: 20),
+
+                                  // Rating Display & Button
+                                  FutureBuilder<Map<String, dynamic>?>(
+                                    future: Provider.of<ApiService>(context, listen: false).getComplaintRating(widget.complaintId),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData) {
+                                        final ratingData = snapshot.data!;
+                                        final status = _data?['complaint']['status'] ?? '';
+                                        
+                                        // Show rating if already rated
+                                        if (ratingData['rated'] == true) {
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 20),
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.shade50,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: Colors.amber.shade200),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'Your Rating',
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Row(
+                                                  children: List.generate(5, (index) {
+                                                    return Icon(
+                                                      index < ratingData['rating']
+                                                          ? Icons.star
+                                                          : Icons.star_border,
+                                                      color: Colors.amber,
+                                                      size: 24,
+                                                    );
+                                                  }),
+                                                ),
+                                                if (ratingData['feedback'] != null) ...[
+                                                  const SizedBox(height: 8),
+                                                  Text(ratingData['feedback']),
+                                                ],
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        
+                                        // Show rate button if resolved/closed and not rated
+                                        if (['resolved', 'closed'].contains(status.toLowerCase())) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 20),
+                                            child: ElevatedButton.icon(
+                                              onPressed: () => _showRatingDialog(),
+                                              icon: const Icon(Icons.star),
+                                              label: const Text('Rate this Service'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.amber,
+                                                minimumSize: const Size(double.infinity, 50),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                      return const SizedBox.shrink();
+                                    },
+                                  ),
                                 ],
                               ),
                             ),
@@ -432,7 +643,60 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                     ),
         ),
       ),
+      floatingActionButton: (_data != null && _data!['assigned_officer'] != null)
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      complaintId: widget.complaintId,
+                      trackingId: _data!['complaint']['tracking_id'],
+                    ),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFF667eea),
+              child: const Icon(Icons.chat, color: Colors.white),
+            )
+          : null,
     );
+  }
+
+  Future<void> _showRatingDialog() async {
+    showDialog(
+      context: context,
+      builder: (_) => RatingDialog(
+        onSubmit: (rating, feedback) async {
+          final authService = Provider.of<AuthService>(context, listen: false);
+          final apiService = Provider.of<ApiService>(context, listen: false);
+          final userId = authService.getUserId();
+          
+          if (userId != null) {
+            final success = await apiService.rateComplaint(
+              widget.complaintId,
+              userId,
+              rating,
+              feedback,
+            );
+            
+            if (success && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Thank you for your rating!')),
+              );
+              setState(() {}); // Refresh UI
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   Widget _buildErrorState() {

@@ -110,6 +110,21 @@ class ComplaintDetail(BaseModel):
     updates: list
 
 
+# ===== RATING SCHEMAS =====
+
+class RatingSubmit(BaseModel):
+    """Submit a rating for a resolved complaint"""
+    rating: int  # 1-5
+    feedback: Optional[str] = None
+
+class RatingResponse(BaseModel):
+    """Rating response"""
+    id: int
+    complaint_id: int
+    rating: int
+    feedback: Optional[str]
+    created_at: datetime
+
 # ===== OFFICER SCHEMAS =====
 
 class ComplaintUpdateRequest(BaseModel):

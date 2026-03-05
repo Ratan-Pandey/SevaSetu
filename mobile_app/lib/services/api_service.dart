@@ -30,6 +30,91 @@ class ApiService {
     }
   }
 
+
+  Future<List<dynamic>?> getChatMessages(int complaintId) async {
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/$complaintId/messages'),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return null;
+  } catch (e) {
+    print('Get chat messages error: $e');
+    return null;
+  }
+}
+
+Future<bool> sendChatMessage(int complaintId, Map<String, dynamic> messageData) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/$complaintId/send'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(messageData),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    print('Send chat message error: $e');
+    return false;
+  }
+}
+
+
+Future<bool> rateComplaint(
+  int complaintId,
+  int userId,
+  int rating,
+  String? feedback,
+) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/complaints/$complaintId/rate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'user_id': userId,
+        'rating': rating,
+        'feedback': feedback,
+      }),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    print('Rate complaint error: $e');
+    return false;
+  }
+}
+
+Future<Map<String, dynamic>?> getComplaintRating(int complaintId) async {
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/complaints/$complaintId/rating'),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return null;
+  } catch (e) {
+    print('Get rating error: $e');
+    return null;
+  }
+}
+
+Future<int> getUnreadChatCount(int complaintId, String userType) async {
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/$complaintId/unread-count?user_type=$userType'),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['unread_count'] ?? 0;
+    }
+    return 0;
+  } catch (e) {
+    print('Get unread count error: $e');
+    return 0;
+  }
+}
+
   /// Update user profile
   Future<Map<String, dynamic>?> updateProfile(
     int userId,
@@ -151,6 +236,23 @@ class ApiService {
     }
   }
 
+  /// Get chat message history
+  Future<List<dynamic>> getChatMessages(int complaintId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/$complaintId/messages'),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return [];
+    } catch (e) {
+      print('Get chat messages error: $e');
+      return [];
+    }
+  }
+
   /// Get unread notification count
   Future<int> getUnreadCount(int userId) async {
     try {
@@ -166,6 +268,27 @@ class ApiService {
     } catch (e) {
       print('Get unread count error: $e');
       return 0;
+    }
+  }
+
+  /// Rate a resolved complaint
+  Future<bool> rateComplaint(int complaintId, int userId, int rating, String? feedback) async {
+    try {
+      final body = {
+        'rating': rating,
+        if (feedback != null && feedback.isNotEmpty) 'feedback': feedback,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/complaints/$complaintId/rate?user_id=$userId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Rate complaint error: $e');
+      return false;
     }
   }
 }

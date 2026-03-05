@@ -1,7 +1,7 @@
 """
-Database Models for Grievance Intelligence System v3.0
-6 Tables: Users, Officers, Complaints, Updates, Notifications, AI Predictions
-Authentication: Firebase (Google Sign-in)
+Database Models for Grievance Intelligence System v4.0 - Phase 4 Complete
+All Tables with Phase 4 features: Image, Audio, Location, FCM, Chat, Rating
+Authentication: Firebase (Google Sign-in) for users, Email/Password for officers
 Language: English only
 """
 
@@ -17,6 +17,7 @@ class User(Base):
     """
     Citizens who file complaints
     Authentication: Firebase (Google Sign-in)
+    Phase 4: Added fcm_token for push notifications
     """
     __tablename__ = "users"
 
@@ -37,6 +38,8 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     profile_completed = Column(Boolean, default=False)
+    
+    # Phase 4: Push Notifications
     fcm_token = Column(String(255), nullable=True)
     
     # Timestamps
@@ -80,11 +83,13 @@ class Officer(Base):
     # Relationships
     assigned_complaints = relationship("Complaint", back_populates="assigned_officer")
     updates = relationship("ComplaintUpdate", back_populates="officer")
+    ratings_received = relationship("ComplaintRating", back_populates="officer")
 
 
 class Complaint(Base):
     """
     Complaints filed by users with AI predictions and status tracking
+    Phase 4: Added image_path, audio_path, latitude, longitude, location_address
     """
     __tablename__ = "complaints"
 
@@ -93,13 +98,21 @@ class Complaint(Base):
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Complaint content (English only)
+    text = Column(Text, nullable=False)
+    
+    # Phase 4: Image Upload
     image_path = Column(String(255), nullable=True)
+    
+    # Phase 4: Audio Complaint
+    audio_path = Column(String(255), nullable=True)
+    audio_duration = Column(Integer, nullable=True)  # in seconds
+    
+    # Phase 4: Location Tracking
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    location_address = Column(String, nullable=True)
-    
-    # Complaint content (English only for now)
-    text = Column(Text, nullable=False)
+    location_address = Column(String(500), nullable=True)
     
     # User selection
     selected_department = Column(String(50), nullable=False)
@@ -134,6 +147,33 @@ class Complaint(Base):
     updates = relationship("ComplaintUpdate", back_populates="complaint", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="complaint", cascade="all, delete-orphan")
     ai_prediction = relationship("AIPrediction", back_populates="complaint", uselist=False, cascade="all, delete-orphan")
+    rating = relationship("ComplaintRating", back_populates="complaint", uselist=False, cascade="all, delete-orphan")
+    chat_messages = relationship("ChatMessage", back_populates="complaint", cascade="all, delete-orphan")
+
+
+class ComplaintRating(Base):
+    """
+    Phase 4: User rating/feedback for resolved complaints
+    Users can rate officer service 1-5 stars with optional feedback
+    """
+    __tablename__ = "complaint_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    complaint_id = Column(Integer, ForeignKey("complaints.id", ondelete="CASCADE"), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True)
+    
+    # Rating (1-5 stars)
+    rating = Column(Integer, nullable=False)
+    feedback = Column(Text, nullable=True)
+    
+    # Timestamp
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    complaint = relationship("Complaint", back_populates="rating")
+    user = relationship("User")
+    officer = relationship("Officer", back_populates="ratings_received")
 
 
 class ComplaintUpdate(Base):
@@ -203,13 +243,31 @@ class AIPrediction(Base):
     delay_risk_score = Column(Float)
     
     # Model version
-    model_version = Column(String(20), default='v2.0')
+    model_version = Column(String(20), default='v4.0')
     
     # Timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     complaint = relationship("Complaint", back_populates="ai_prediction")
+
+
+class ChatMessage(Base):
+    """
+    Phase 4: Real-time chat messages between users and officers
+    """
+    __tablename__ = "chat_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    complaint_id = Column(Integer, ForeignKey('complaints.id', ondelete="CASCADE"), nullable=False)
+    sender_id = Column(Integer, nullable=False)  # user_id or officer_id
+    sender_type = Column(String(10), nullable=False)  # 'user' or 'officer'
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    complaint = relationship("Complaint", back_populates="chat_messages")
 
 
 # Helper Functions

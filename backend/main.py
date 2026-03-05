@@ -19,12 +19,15 @@ from fastapi import File, UploadFile
 from fastapi.staticfiles import StaticFiles
 import shutil
 import time
-from models import Complaint, User
+from models import Complaint, User, ChatMessage
 import firebase_admin
 from firebase_admin import credentials, messaging
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import socketio
+from websocket_server import sio
+
 
 # Initialize Firebase
 try:
@@ -42,6 +45,9 @@ app = FastAPI(
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Create Socket.IO ASGI app
+socket_app = socketio.ASGIApp(sio, app)
 
 # Initialize Firebase Admin
 try:
@@ -387,9 +393,30 @@ def get_officer_complaints(
 
 
 @app.post("/officer/complaints/{complaint_id}/assign/{officer_id}")
-def assign_to_me(complaint_id: int, officer_id: int, db: Session = Depends(get_db)):
+async def assign_to_me(complaint_id: int, officer_id: int, db: Session = Depends(get_db)):
     """Assign complaint to officer"""
     complaint = crud.assign_complaint_to_officer(db, complaint_id, officer_id)
+    
+    # Send email notification to the user about assignment
+    if complaint and complaint.user_id:
+        user = db.query(models.User).filter(models.User.id == complaint.user_id).first()
+        officer = db.query(models.Officer).filter(models.Officer.id == officer_id).first()
+        if user and user.email and officer:
+            await send_email(
+                user.email,
+                f"Complaint {complaint.tracking_id} Assigned",
+                f"""
+                <h2>Dear {user.name},</h2>
+                <p>Your complaint has been assigned to an officer.</p>
+                <p><strong>Tracking ID:</strong> {complaint.tracking_id}</p>
+                <p><strong>Assigned Officer:</strong> {officer.name}</p>
+                <p><strong>Department:</strong> {officer.department}</p>
+                <p>You will receive updates on the progress.</p>
+                <br>
+                <p>Thank you for your patience.</p>
+                """
+            )
+    
     return {"message": "Complaint assigned successfully", "complaint": complaint}
 
 
@@ -454,6 +481,60 @@ def unread_count(user_id: int, db: Session = Depends(get_db)):
     """Get unread notification count"""
     count = crud.get_unread_count(db, user_id)
     return {"unread_count": count}
+
+# ===== RATING ROUTES =====
+
+@app.post("/complaints/{complaint_id}/rate")
+async def rate_complaint(
+    complaint_id: int,
+    user_id: int,
+    rating_data: schemas.RatingSubmit,
+    db: Session = Depends(get_db)
+):
+    """Submit a rating for a resolved complaint"""
+    from models import ComplaintRating
+    
+    complaint = db.query(models.Complaint).filter(models.Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    
+    if complaint.status != 'resolved':
+        raise HTTPException(status_code=400, detail="Only resolved complaints can be rated")
+    
+    # Check if already rated
+    existing = db.query(ComplaintRating).filter(ComplaintRating.complaint_id == complaint_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Complaint already rated")
+    
+    # Create rating
+    new_rating = ComplaintRating(
+        complaint_id=complaint_id,
+        user_id=user_id,
+        rating=rating_data.rating,
+        feedback=rating_data.feedback
+    )
+    db.add(new_rating)
+    db.commit()
+    db.refresh(new_rating)
+    
+    # Send email to assigned officer about rating received
+    if complaint.assigned_officer_id:
+        officer = db.query(models.Officer).filter(models.Officer.id == complaint.assigned_officer_id).first()
+        if officer and officer.email:
+            await send_email(
+                officer.email,
+                f"Rating Received - {complaint.tracking_id}",
+                f"""
+                <h2>Hello {officer.name},</h2>
+                <p>A user has rated your resolution for complaint <strong>{complaint.tracking_id}</strong>.</p>
+                <p><strong>Rating:</strong> {'⭐' * rating_data.rating} ({rating_data.rating}/5)</p>
+                <p><strong>Feedback:</strong> {rating_data.feedback or 'No feedback provided'}</p>
+                <br>
+                <p>Thank you for your service.</p>
+                """
+            )
+    
+    return {"message": "Rating submitted successfully", "rating": new_rating}
 
 
 # ===== ANALYTICS ROUTES (from old system) =====
@@ -530,6 +611,254 @@ def get_all_complaints(skip: int = 0, limit: int = 100, db: Session = Depends(ge
     return crud.get_all_complaints(db, skip, limit)
 
 
+# Audio
+@app.post("/complaints/{complaint_id}/upload-audio")
+async def upload_complaint_audio(
+    complaint_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Complaint not found")
+        
+        # Save file
+        file_extension = file.filename.split('.')[-1]
+        file_name = f"audio_{complaint_id}_{int(time.time())}.{file_extension}"
+        file_path = f"static/audio_complaints/{file_name}"
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update complaint
+        complaint.audio_path = file_path
+        db.commit()
+        
+        return {
+            "message": "Audio uploaded successfully",
+            "audio_path": file_path,
+            "audio_url": f"http://127.0.0.1:8000/{file_path}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/complaints/{complaint_id}/audio")
+async def get_complaint_audio(complaint_id: int, db: Session = Depends(get_db)):
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint or not complaint.audio_path:
+        raise HTTPException(status_code=404, detail="Audio not found")
+    
+    return {
+        "audio_url": f"http://127.0.0.1:8000/{complaint.audio_path}",
+        "duration": complaint.audio_duration
+    }    
+
+
+# ===== CHAT ENDPOINTS =====
+
+@app.post("/chat/{complaint_id}/send")
+async def send_chat_message(
+    complaint_id: int,
+    message_data: dict,
+    db: Session = Depends(get_db)
+):
+    """Save chat message to database"""
+    try:
+        new_message = ChatMessage(
+            complaint_id=complaint_id,
+            sender_id=message_data['sender_id'],
+            sender_type=message_data['sender_type'],
+            message=message_data['message']
+        )
+        db.add(new_message)
+        db.commit()
+        db.refresh(new_message)
+        
+        return {
+            "id": new_message.id,
+            "complaint_id": new_message.complaint_id,
+            "sender_id": new_message.sender_id,
+            "sender_type": new_message.sender_type,
+            "message": new_message.message,
+            "created_at": new_message.created_at.isoformat(),
+            "is_read": new_message.is_read
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/complaints/{complaint_id}/rate")
+async def rate_complaint(
+    complaint_id: int,
+    rating_data: dict,
+    db: Session = Depends(get_db)
+):
+    """User rates a resolved complaint"""
+    try:
+        complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Complaint not found")
+        
+        # Check if complaint is resolved
+        if complaint.status.lower() not in ['resolved', 'closed']:
+            raise HTTPException(
+                status_code=400,
+                detail="Can only rate resolved/closed complaints"
+            )
+        
+        # Check if already rated
+        existing_rating = db.query(Rating).filter(
+            Rating.complaint_id == complaint_id
+        ).first()
+        if existing_rating:
+            raise HTTPException(status_code=400, detail="Already rated")
+        
+        # Create rating
+        new_rating = Rating(
+            complaint_id=complaint_id,
+            user_id=rating_data['user_id'],
+            officer_id=complaint.assigned_officer_id,
+            rating=rating_data['rating'],
+            feedback=rating_data.get('feedback')
+        )
+        db.add(new_rating)
+        db.commit()
+        db.refresh(new_rating)
+        
+        # Send email to officer
+        if complaint.assigned_officer_id:
+            officer = db.query(User).filter(User.id == complaint.assigned_officer_id).first()
+            if officer and officer.email:
+                await send_email(
+                    officer.email,
+                    "New Rating Received",
+                    f"""
+                    <h2>Rating Received</h2>
+                    <p>You received a <strong>{rating_data['rating']}/5</strong> rating for complaint {complaint.tracking_id}</p>
+                    {f"<p>Feedback: {rating_data.get('feedback', 'No feedback')}</p>" if rating_data.get('feedback') else ""}
+                    """
+                )
+        
+        return {
+            "message": "Rating submitted successfully",
+            "rating_id": new_rating.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/complaints/{complaint_id}/rating")
+async def get_complaint_rating(complaint_id: int, db: Session = Depends(get_db)):
+    """Get rating for a complaint"""
+    rating = db.query(Rating).filter(Rating.complaint_id == complaint_id).first()
+    if not rating:
+        return {"rated": False}
+    
+    return {
+        "rated": True,
+        "rating": rating.rating,
+        "feedback": rating.feedback,
+        "created_at": rating.created_at.isoformat()
+    }
+
+@app.get("/officer/{officer_id}/ratings")
+async def get_officer_ratings(officer_id: int, db: Session = Depends(get_db)):
+    """Get all ratings for an officer"""
+    ratings = db.query(Rating).filter(Rating.officer_id == officer_id).all()
+    
+    if not ratings:
+        return {
+            "total_ratings": 0,
+            "average_rating": 0,
+            "ratings": []
+        }
+    
+    total_rating = sum(r.rating for r in ratings)
+    average_rating = total_rating / len(ratings)
+    
+    return {
+        "total_ratings": len(ratings),
+        "average_rating": round(average_rating, 2),
+        "ratings": [{
+            "complaint_id": r.complaint_id,
+            "rating": r.rating,
+            "feedback": r.feedback,
+            "created_at": r.created_at.isoformat()
+        } for r in ratings]
+    }
+
+@app.get("/analytics/ratings-summary")
+async def get_ratings_summary(db: Session = Depends(get_db)):
+    """Get system-wide rating analytics"""
+    ratings = db.query(Rating).all()
+    
+    if not ratings:
+        return {
+            "total_ratings": 0,
+            "average_rating": 0,
+            "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        }
+    
+    total_rating = sum(r.rating for r in ratings)
+    average_rating = total_rating / len(ratings)
+    
+    # Rating distribution
+    distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for r in ratings:
+        distribution[r.rating] += 1
+    
+    return {
+        "total_ratings": len(ratings),
+        "average_rating": round(average_rating, 2),
+        "rating_distribution": distribution
+    }        
+
+
+@app.get("/chat/{complaint_id}/messages")
+async def get_chat_messages(complaint_id: int, db: Session = Depends(get_db)):
+    """Get all messages for a complaint"""
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.complaint_id == complaint_id
+    ).order_by(ChatMessage.created_at.asc()).all()
+    
+    return [{
+        "id": msg.id,
+        "sender_id": msg.sender_id,
+        "sender_type": msg.sender_type,
+        "message": msg.message,
+        "created_at": msg.created_at.isoformat(),
+        "is_read": msg.is_read
+    } for msg in messages]
+
+
+@app.put("/chat/messages/{message_id}/read")
+async def mark_chat_message_read(message_id: int, db: Session = Depends(get_db)):
+    """Mark a message as read"""
+    message = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
+    if message:
+        message.is_read = True
+        db.commit()
+        return {"message": "Marked as read"}
+    raise HTTPException(status_code=404, detail="Message not found")
+
+
+@app.get("/chat/{complaint_id}/unread-count")
+async def get_chat_unread_count(
+    complaint_id: int,
+    user_type: str,
+    db: Session = Depends(get_db)
+):
+    """Get count of unread messages for user or officer"""
+    opposite_type = 'officer' if user_type == 'user' else 'user'
+    
+    count = db.query(ChatMessage).filter(
+        ChatMessage.complaint_id == complaint_id,
+        ChatMessage.sender_type == opposite_type,
+        ChatMessage.is_read == False
+    ).count()
+    
+    return {"unread_count": count}
+
+
 # ===== FCM ENDPOINTS =====
 
 @app.post("/user/{user_id}/fcm-token")
@@ -556,7 +885,7 @@ def send_push_notification(fcm_token: str, title: str, body: str):
         print(f"❌ Push notification error: {e}")
 
 
-# Run with: python -m uvicorn main:app --reload
+# Run with: python -m uvicorn main:socket_app --reload
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:socket_app", host="0.0.0.0", port=8000, reload=True)
