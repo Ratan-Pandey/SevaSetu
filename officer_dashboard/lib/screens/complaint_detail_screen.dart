@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'chat_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class ComplaintDetailScreen extends StatefulWidget {
   final int complaintId;
@@ -18,10 +20,25 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   bool _isLoading = true;
   final _commentController = TextEditingController();
 
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
   @override
   void initState() {
     super.initState();
     _loadDetail();
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
+    });
+    _audioPlayer.onDurationChanged.listen((newDuration) {
+      if (mounted) setState(() => _duration = newDuration);
+    });
+    _audioPlayer.onPositionChanged.listen((newPosition) {
+      if (mounted) setState(() => _position = newPosition);
+    });
   }
 
   Future<void> _loadDetail() async {
@@ -227,6 +244,71 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // Audio Evidence
+                      if (_data!['complaint']['audio_path'] != null) ...[
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Voice Recording',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(
+                                          _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                          color: Colors.red,
+                                          size: 36,
+                                        ),
+                                        onPressed: () async {
+                                          if (_isPlaying) {
+                                            await _audioPlayer.pause();
+                                          } else {
+                                            final url = 'http://127.0.0.1:8000/${_data!['complaint']['audio_path']}';
+                                            await _audioPlayer.play(UrlSource(url));
+                                          }
+                                        },
+                                      ),
+                                      Expanded(
+                                        child: Slider(
+                                          activeColor: Colors.red,
+                                          inactiveColor: Colors.red.shade100,
+                                          min: 0,
+                                          max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1,
+                                          value: _position.inSeconds.toDouble().clamp(0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1),
+                                          onChanged: (value) async {
+                                            final position = Duration(seconds: value.toInt());
+                                            await _audioPlayer.seek(position);
+                                          },
+                                        ),
+                                      ),
+                                      Text(
+                                        '${_position.toString().split('.')[0].padLeft(8, '0').substring(3)} / '
+                                        '${_duration.toString().split('.')[0].padLeft(8, '0').substring(3)}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Image Evidence
                       if (_data!['complaint']['image_path'] != null &&
                           _data!['complaint']['image_path'].toString().isNotEmpty)
@@ -317,6 +399,23 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                     ],
                   ),
                 ),
+      floatingActionButton: (_data != null && _data!['assigned_officer'] != null)
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      complaintId: widget.complaintId,
+                      trackingId: _data!['complaint']['tracking_id'],
+                    ),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFF1e3a8a),
+              child: const Icon(Icons.chat, color: Colors.white),
+            )
+          : null,
     );
   }
 
@@ -336,6 +435,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   @override
   void dispose() {
     _commentController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 }

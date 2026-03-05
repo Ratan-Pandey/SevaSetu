@@ -8,6 +8,9 @@ import 'dart:io';
 import 'package:http_parser/http_parser.dart';
 import 'package:http/http.dart' as http;
 import '../../services/location_service.dart';
+import '../../services/audio_service.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:async';
 
 class ComplaintFormScreen extends StatefulWidget {
   final String department;
@@ -26,6 +29,13 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
   final ImagePicker _picker = ImagePicker();
   Map<String, dynamic>? _locationData;
   bool _fetchingLocation = false;
+  
+  final AudioService _audioService = AudioService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _recordedAudioPath;
+  bool _isRecording = false;
+  int _recordingDuration = 0;
+  Timer? _recordingTimer;
 
   Future<void> _getLocation() async {
     setState(() => _fetchingLocation = true);
@@ -79,6 +89,75 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
     }
   }
 
+  Future<void> _startRecording() async {
+    final started = await _audioService.startRecording();
+    if (started) {
+      if (mounted) setState(() => _isRecording = true);
+      _startRecordingTimer();
+    }
+  }
+
+  void _startRecordingTimer() {
+    _recordingDuration = 0;
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() => _recordingDuration++);
+    });
+  }
+
+  Future<void> _stopRecording() async {
+    _recordingTimer?.cancel();
+    final path = await _audioService.stopRecording();
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _recordedAudioPath = path;
+      });
+    }
+  }
+
+  Future<void> _playAudio() async {
+    if (_recordedAudioPath != null) {
+      await _audioPlayer.play(DeviceFileSource(_recordedAudioPath!));
+    }
+  }
+
+  Future<void> _deleteRecording() async {
+    if (_recordedAudioPath != null) {
+      final file = File(_recordedAudioPath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+    if (mounted) setState(() => _recordedAudioPath = null);
+  }
+
+  Future<bool> _uploadAudio(int complaintId) async {
+    if (_recordedAudioPath == null) return true;
+    
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://127.0.0.1:8000/complaints/$complaintId/upload-audio'),
+      );
+      
+      request.files.add(
+        await http.MultipartFile.fromPath('file', _recordedAudioPath!),
+      );
+      
+      final response = await request.send();
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Audio upload error: $e');
+      return false;
+    }
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _submitComplaint() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -111,6 +190,11 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
       // Upload image if selected
       if (_selectedImage != null) {
         await _uploadImage(result['id']);
+      }
+
+      // Upload audio if recorded
+      if (_recordedAudioPath != null) {
+        await _uploadAudio(result['id']);
       }
 
       Navigator.pushReplacement(
@@ -599,6 +683,9 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
   @override
   void dispose() {
     _complaintController.dispose();
+    _recordingTimer?.cancel();
+    _audioPlayer.dispose();
+    _audioService.dispose();
     super.dispose();
   }
 }

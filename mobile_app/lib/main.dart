@@ -5,6 +5,7 @@ import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'services/chat_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -28,6 +29,9 @@ class GrievanceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthService()),
         Provider(create: (_) => ApiService()),
         Provider(create: (_) => NotificationService()),
+        ProxyProvider0<ChatService>(
+          update: (_, __) => ChatService(serverUrl: 'http://10.0.2.2:8000'),
+        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
