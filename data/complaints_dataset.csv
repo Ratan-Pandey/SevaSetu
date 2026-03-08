@@ -1,0 +1,321 @@
+complaint_id,description,category,urgency,department,created_day,resolution_days
+1,Frequent power cuts during evening hours,Electricity,High,Power Department,1,7
+2,Transformer overheating causing outages,Electricity,High,Power Department,2,5
+3,No electricity for three days emergency,Electricity,High,Power Department,3,4
+4,Voltage fluctuations damaging home appliances,Electricity,Medium,Power Department,4,10
+5,Electric pole leaning dangerously,Electricity,High,Power Department,5,4
+6,Meter reading incorrect bill very high,Electricity,Low,Power Department,6,16
+7,Loose electric wires hanging near school,Electricity,High,Power Department,7,3
+8,Frequent fuse blowouts in residential area,Electricity,Medium,Power Department,8,8
+9,Power supply stopped every night,Electricity,Medium,Power Department,9,9
+10,Voltage low appliances not working,Electricity,Medium,Power Department,10,10
+11,Illegal power connection in nearby shop,Electricity,High,Power Department,11,12
+12,Transformer making noise overheating,Electricity,High,Power Department,12,5
+13,Broken electric pole after accident,Electricity,High,Power Department,13,2
+14,Exposed wiring causing safety hazard,Electricity,High,Power Department,14,3
+15,Electric meter seal broken someone tampered,Electricity,Medium,Power Department,15,9
+16,No power backup in government hospital,Electricity,High,Power Department,16,1
+17,Street lights not functioning proper darkness,Electricity,Low,Power Department,17,11
+18,Power supply interrupted during exams,Electricity,Medium,Power Department,18,6
+19,Bill incorrect faulty meter reading issue,Electricity,Low,Power Department,19,14
+20,Electric junction box left open children risk,Electricity,High,Power Department,20,4
+21,Overloaded transformer causing sparks,Electricity,High,Power Department,21,3
+22,Electric wire touching tree branches danger,Electricity,Medium,Power Department,22,7
+23,No electricity in newly developed area,Electricity,High,Power Department,23,20
+24,Underground cable damaged during digging,Electricity,High,Power Department,24,5
+25,Connection application pending for months,Electricity,Medium,Power Department,25,18
+26,Improper earthing electric shock risk,Electricity,High,Power Department,26,6
+27,Electricity staff not responding complaints ignored,Electricity,Low,Power Department,27,15
+28,High tension wires passing dangerously over houses,Electricity,High,Power Department,28,10
+29,Load shedding without notice sudden cuts,Electricity,Medium,Power Department,29,6
+30,Meter box broken lock missing exposed,Electricity,Medium,Power Department,30,9
+31,Pole about to fall urgent repair needed,Electricity,High,Power Department,31,3
+32,Service wire sagging very low touching vehicles,Electricity,Medium,Power Department,32,8
+33,Power restoration after storm pending,Electricity,High,Power Department,33,5
+34,Bill duplicate coming online payment failed,Electricity,Low,Power Department,34,17
+35,Fuse box overheating smoke smell emergency,Electricity,High,Power Department,35,2
+36,Connection wire loose hanging fire risk,Electricity,High,Power Department,36,4
+37,Meter change request pending two months,Electricity,Medium,Power Department,37,14
+38,Scheduled outage timing inform notice not received,Electricity,Low,Power Department,38,11
+39,Transformer oil leak on ground fire hazard,Electricity,High,Power Department,39,3
+40,Street light on daytime waste electricity turn off,Electricity,Low,Power Department,40,13
+41,No water supply for five consecutive days,Water Supply,High,Water Department,41,4
+42,Water not coming since morning tanker also not sent,Water Supply,High,Water Department,42,5
+43,Water leakage near main pipeline wastage,Water Supply,Medium,Water Department,43,6
+44,Contaminated drinking water supplied health risk,Water Supply,High,Water Department,44,3
+45,Pressure very low first floor not reaching,Water Supply,Low,Water Department,45,10
+46,Water tanker not arriving on schedule irregular,Water Supply,Medium,Water Department,46,8
+47,Pipeline burst on road water flowing,Water Supply,High,Water Department,47,4
+48,Irregular water supply since last month timing issue,Water Supply,Medium,Water Department,48,12
+49,Tank overflow happening seepage problem,Water Supply,Low,Water Department,49,9
+50,Connection application pending approval not received,Water Supply,Medium,Water Department,50,15
+51,Illegal water connection neighbor has taken action needed,Water Supply,High,Water Department,51,14
+52,Public tap closed locality water shortage,Water Supply,Medium,Water Department,52,7
+53,Meter damaged reading wrong bill excessive,Water Supply,Low,Water Department,53,16
+54,Supply stopped without notice suddenly closed,Water Supply,Medium,Water Department,54,6
+55,Pipeline damaged during road construction work,Water Supply,High,Water Department,55,4
+56,Dirty water coming after rainfall muddy,Water Supply,High,Water Department,56,5
+57,Bill correction delay pending complaint made,Water Supply,Low,Water Department,57,18
+58,Waterlogging due to pipe burst emergency,Water Supply,High,Water Department,58,3
+59,Insufficient supply apartments pressure low,Water Supply,Medium,Water Department,59,11
+60,Tank cleaning not done dirty water health issue,Water Supply,High,Water Department,60,4
+61,Leakage overhead tank continuous dripping,Water Supply,Low,Water Department,61,9
+62,Rusty brown water from tap not drinkable,Water Supply,High,Water Department,62,4
+63,Connection fee paid line not installed pending,Water Supply,Medium,Water Department,63,17
+64,Tanker illegally selling water action required,Water Supply,High,Water Department,64,13
+65,Main valve damaged leak happening repair urgent,Water Supply,High,Water Department,65,6
+66,School has no water children facing problem,Water Supply,High,Water Department,66,2
+67,Tanker service delay happening not on schedule,Water Supply,Medium,Water Department,67,10
+68,Pressure fluctuating daily morning evening different,Water Supply,Low,Water Department,68,12
+69,Drainage water mixing with supply line emergency health risk,Water Supply,High,Water Department,69,5
+70,Department staff unresponsive complaint being ignored,Water Supply,Low,Water Department,70,14
+71,Bore well pump failed no backup water crisis,Water Supply,High,Water Department,71,6
+72,Supply timing changed notice not given inconvenient,Water Supply,Low,Water Department,72,11
+73,Meter box broken rain water entering damage,Water Supply,Low,Water Department,73,12
+74,Emergency tanker requested not sent waiting,Water Supply,High,Water Department,74,5
+75,Pipeline replacement pending very long time delay,Water Supply,Low,Water Department,75,18
+76,Quality poor smell coming test needed please,Water Supply,High,Water Department,76,3
+77,Valve box cover missing safety issue fix needed,Water Supply,Medium,Water Department,77,8
+78,Connection approval intentional delay bribe demanded,Water Supply,High,Water Department,78,20
+79,Water at night stopped timing change unauthorized,Water Supply,Medium,Water Department,79,9
+80,Treatment plant issue chlorine smell very strong,Water Supply,Medium,Water Department,80,10
+81,Garbage not collected for ten days smell terrible,Sanitation,Medium,Municipal Services,81,6
+82,Garbage ten days not collected foul smell,Sanitation,Medium,Municipal Services,82,5
+83,Open dumping waste near houses health hazard,Sanitation,High,Municipal Services,83,5
+84,Dustbin overflow happening road waste spread,Sanitation,Medium,Municipal Services,84,7
+85,Dead animal on road lying remove urgently,Sanitation,High,Municipal Services,85,2
+86,Public toilet very dirty cleaning not done,Sanitation,Medium,Municipal Services,86,8
+87,Sewage overflowing on street emergency clean now,Sanitation,High,Municipal Services,87,4
+88,Garbage collection timing irregular skipping,Sanitation,Low,Municipal Services,88,10
+89,Waste burning pollution happening action required,Sanitation,Medium,Municipal Services,89,9
+90,Dustbins not provided area bins not available,Sanitation,Low,Municipal Services,90,11
+91,Drain cleaning not done blocked overflow,Sanitation,Medium,Municipal Services,91,7
+92,Mosquito breeding stagnant water dengue risk,Sanitation,High,Municipal Services,92,5
+93,Manhole cover broken accident possible fix now,Sanitation,High,Municipal Services,93,3
+94,Sanitation worker absent for days not coming,Sanitation,Medium,Municipal Services,94,12
+95,Garbage vehicle skipping locality complaint pending,Sanitation,Low,Municipal Services,95,14
+96,Public toilet locked weeks closed open needed,Sanitation,Low,Municipal Services,96,9
+97,Septic tank overflow emergency cleaning urgent,Sanitation,High,Municipal Services,97,4
+98,Foul smell waste dump unbearable health problem,Sanitation,Medium,Municipal Services,98,8
+99,Construction debris on road dumped remove please,Sanitation,Low,Municipal Services,99,15
+100,Drainage blockage flooding happening emergency,Sanitation,High,Municipal Services,100,3
+101,Slum area has no sanitation facility urgent need,Sanitation,High,Municipal Services,101,20
+102,Garbage dumped near school children health risk,Sanitation,Medium,Municipal Services,102,6
+103,Manual scavenging practice continuing action needed,Sanitation,High,Municipal Services,103,25
+104,Complaint pending long time being ignored,Sanitation,Low,Municipal Services,104,14
+105,Waste segregation not happening mixed dumping,Sanitation,Low,Municipal Services,105,10
+106,Dustbins broken replacement not done pending,Sanitation,Low,Municipal Services,106,12
+107,Sewage water entering house emergency,Sanitation,High,Municipal Services,107,4
+108,Market area cleaning not done daily problem,Sanitation,Medium,Municipal Services,108,7
+109,Collection vehicle leaking waste falling on road,Sanitation,Low,Municipal Services,109,9
+110,Hospital drain overflow emergency clean immediately,Sanitation,High,Municipal Services,110,3
+111,Sewer line choke overflow continuous problem,Sanitation,High,Municipal Services,111,5
+112,Treatment plant not working smell in area,Sanitation,High,Municipal Services,112,6
+113,Gutter cover missing children might fall install now,Sanitation,High,Municipal Services,113,4
+114,Sanitation staff demanding tips from shops regularly,Sanitation,Medium,Municipal Services,114,11
+115,Toilet facility broken repair not done months,Sanitation,Medium,Municipal Services,115,13
+116,Waste disposal timing irregular inconvenient,Sanitation,Low,Municipal Services,116,11
+117,Sewer gas smell in homes health hazard,Sanitation,Medium,Municipal Services,117,8
+118,Drain water stagnant mosquito larvae visible,Sanitation,High,Municipal Services,118,5
+119,Bio-medical waste improper disposal hospital nearby,Sanitation,High,Municipal Services,119,7
+120,Sweeper absent complaint not heard being ignored,Sanitation,Low,Municipal Services,120,15
+121,Road full potholes accidents happening repair urgent,Roads,High,Municipal Services,121,8
+122,Road broken during rain water collecting,Roads,Medium,Municipal Services,122,10
+123,Speed breaker missing school nearby dangerous,Roads,High,Municipal Services,123,5
+124,Footpath encroached hawkers walking impossible,Roads,Medium,Municipal Services,124,12
+125,Main road digging since months work incomplete,Roads,High,Municipal Services,125,15
+126,Potholes very deep vehicle damage happening,Roads,High,Municipal Services,126,6
+127,Street repair pending complaint made being ignored,Roads,Low,Municipal Services,127,14
+128,Zebra crossing faded repaint needed safety issue,Roads,Low,Municipal Services,128,11
+129,Road construction debris left blocking traffic,Roads,Medium,Municipal Services,129,9
+130,Divider broken after accident repair not done,Roads,High,Municipal Services,130,4
+131,Footpath tiles missing uneven surface fall risk,Roads,Low,Municipal Services,131,13
+132,Speed limit sign board missing install needed,Roads,Low,Municipal Services,132,10
+133,Road waterlogging drainage issue fix needed,Roads,Medium,Municipal Services,133,7
+134,Manhole on road open cover missing accident risk,Roads,High,Municipal Services,134,3
+135,Traffic signal not working chaos happening,Roads,High,Municipal Services,135,5
+136,Road widening work incomplete for years pending,Roads,Medium,Municipal Services,136,20
+137,Pedestrian crossing missing school area dangerous,Roads,High,Municipal Services,137,6
+138,Shoulder road damaged edge crumbling vehicle risk,Roads,Medium,Municipal Services,138,9
+139,Construction material dumped road blocking traffic,Roads,Medium,Municipal Services,139,8
+140,Bridge railing damaged safety hazard fix urgent,Roads,High,Municipal Services,140,4
+141,Doctor not available emergency ward closed,Health,High,Health Department,141,2
+142,Medicine stock not available pharmacy empty patients suffering,Health,High,Health Department,142,3
+143,Hospital building dirty cleanliness issue infection risk,Health,Medium,Health Department,143,8
+144,Ambulance delay emergency patient waiting critical,Health,High,Health Department,144,1
+145,Vaccination camp cancelled notice not received,Health,Medium,Health Department,145,7
+146,Staff rude behavior patients inappropriate,Health,Low,Health Department,146,10
+147,Equipment not working X-ray machine damaged,Health,High,Health Department,147,5
+148,Outpatient timing irregular doctor late coming,Health,Medium,Health Department,148,9
+149,Medicine expired date check needed pharmacy,Health,High,Health Department,149,4
+150,Drinking water facility not available hospital basic need,Health,Medium,Health Department,150,6
+151,Toilet not clean unhygienic condition patients problem,Health,Medium,Health Department,151,8
+152,Emergency ward air conditioner not working summer unbearable,Health,High,Health Department,152,3
+153,Lab report delay happening urgent test result pending,Health,Medium,Health Department,153,7
+154,Wheelchair not available disabled patients problem,Health,Low,Health Department,154,11
+155,Blood bank stock low emergency shortage possible,Health,High,Health Department,155,5
+156,Registration counter closed timing issue outpatient time,Health,Low,Health Department,156,9
+157,Doctor absent without notice patients waiting hours,Health,High,Health Department,157,6
+158,Pharmacy overcharging taking more than price,Health,Medium,Health Department,158,10
+159,Operation theater not sanitized infection control issue,Health,High,Health Department,159,4
+160,Maternity ward understaffed nurses less emergency,Health,High,Health Department,160,3
+161,Bribe demanded for land record update money demanded,Corruption,High,Vigilance Department,161,20
+162,Bribe demanded for certificate issue,Corruption,High,Vigilance Department,162,22
+163,Unofficial payment asked for water connection,Corruption,High,Vigilance Department,163,18
+164,Electricity staff demanding money for repair bribe,Corruption,High,Vigilance Department,164,12
+165,Service delay unless bribe paid money needed,Corruption,Medium,Vigilance Department,165,15
+166,Certificate issuance bribe demanded openly,Corruption,High,Vigilance Department,166,22
+167,Favoritism complaint resolution politics connection,Corruption,Medium,Vigilance Department,167,14
+168,Illegal fees charged meter installation,Corruption,High,Vigilance Department,168,16
+169,Tanker supplied only after payment unofficial,Corruption,High,Vigilance Department,169,10
+170,Sanitation workers collecting money shops tips,Corruption,Medium,Vigilance Department,170,9
+171,Property mutation bribe demanded inspector,Corruption,High,Vigilance Department,171,25
+172,Bill correction delayed bribe not given therefore,Corruption,Medium,Vigilance Department,172,18
+173,Unauthorized service charges collection happening,Corruption,Low,Vigilance Department,173,12
+174,Complaint closure payment demanded openly,Corruption,High,Vigilance Department,174,14
+175,Approval delayed intentionally for bribe waiting,Corruption,Medium,Vigilance Department,175,20
+176,Inspector demanding illegal gratification threatening,Corruption,High,Vigilance Department,176,30
+177,Sewage cleaning extra money demanded staff,Corruption,Medium,Vigilance Department,177,11
+178,Power reconnection delayed money demanded,Corruption,High,Vigilance Department,178,9
+179,Sanitation service unauthorized fees charged,Corruption,Low,Vigilance Department,179,13
+180,Water supply restored bribe payment after only,Corruption,High,Vigilance Department,180,8
+181,Bill settlement corrupt practice officer did,Corruption,Medium,Vigilance Department,181,21
+182,Grievance escalation bribe demanded senior,Corruption,High,Vigilance Department,182,17
+183,Public services illegal charges mandatory,Corruption,Low,Vigilance Department,183,14
+184,Service allocation favoritism politics involved,Corruption,Medium,Vigilance Department,184,19
+185,File movement money demanded office,Corruption,High,Vigilance Department,185,24
+186,Contract allotment illegal payment bribe taken,Corruption,High,Vigilance Department,186,28
+187,Complaint ignored without payment no action,Corruption,Medium,Vigilance Department,187,15
+188,Inspection visit openly bribe demanded,Corruption,High,Vigilance Department,188,20
+189,Approval process unofficial fees mandatory made,Corruption,Medium,Vigilance Department,189,18
+190,Speed up work bribe openly demanded,Corruption,High,Vigilance Department,190,16
+191,Officials unauthorized money collecting regularly,Corruption,Medium,Vigilance Department,191,13
+192,Receipt not given money taken for services,Corruption,High,Vigilance Department,192,11
+193,Work quality poor bribe not given therefore deliberately,Corruption,Medium,Vigilance Department,193,17
+194,Connection approval hold money not given therefore pending,Corruption,High,Vigilance Department,194,19
+195,Staff threatening complaint not heard bribe give,Corruption,High,Vigilance Department,195,21
+196,Meter reading manipulation bribe taken changed,Corruption,Medium,Vigilance Department,196,14
+197,Service restoration delay intentional payment needed,Corruption,High,Vigilance Department,197,10
+198,Complaint register not doing bribe first give,Corruption,High,Vigilance Department,198,15
+199,Official documents delay money demanding department,Corruption,Medium,Vigilance Department,199,23
+200,Inspection pass bribe demanded failure threat,Corruption,High,Vigilance Department,200,26
+201,Street light not working nights dangerous dark,Street Lighting,Medium,Municipal Services,201,9
+202,Street lamp pole bent vehicle hit repair needed,Street Lighting,High,Municipal Services,202,5
+203,Lights switching off automatically timer issue,Street Lighting,Low,Municipal Services,203,11
+204,Bulb fused not replaced weeks dark happening,Street Lighting,Medium,Municipal Services,204,8
+205,New streetlights installation pending application made,Street Lighting,Low,Municipal Services,205,14
+206,Light on during daytime electricity waste turn off,Street Lighting,Low,Municipal Services,206,10
+207,Pole damaged base weak may fall anytime risk,Street Lighting,High,Municipal Services,207,4
+208,Wiring exposed children playing area danger,Street Lighting,High,Municipal Services,208,3
+209,Lights flickering voltage issue fix please,Street Lighting,Medium,Municipal Services,209,7
+210,Coverage insufficient dark spots accidents happening,Street Lighting,Medium,Municipal Services,210,12
+211,Timer malfunction lights irregular on off timing,Street Lighting,Low,Municipal Services,211,9
+212,LED replacement pending old bulbs energy waste,Street Lighting,Low,Municipal Services,212,15
+213,Pole leaning dangerous storm damage repair urgent,Street Lighting,High,Municipal Services,213,4
+214,Light intensity low dim visibility poor safety issue,Street Lighting,Medium,Municipal Services,214,8
+215,Cable damage sparking fire risk emergency,Street Lighting,High,Municipal Services,215,3
+216,Switch box broken vandalism repair pending action,Street Lighting,Medium,Municipal Services,216,10
+217,New area lights not installed darkness problem,Street Lighting,High,Municipal Services,217,18
+218,Solar lights not working battery issue replace needed,Street Lighting,Low,Municipal Services,218,13
+219,Maintenance pending complaint being ignored,Street Lighting,Low,Municipal Services,219,14
+220,Junction light missing accidents increasing install needed,Street Lighting,High,Municipal Services,220,6
+221,Gutter overflowing on street water collecting,Drainage,High,Municipal Services,221,4
+222,Drain blocked cleaning not done months,Drainage,Medium,Municipal Services,222,7
+223,Manhole cover missing sewer open danger,Drainage,High,Municipal Services,223,3
+224,Rainwater logging drainage poor design issue,Drainage,High,Municipal Services,224,5
+225,Sewer line choke overflow continuous problem,Drainage,High,Municipal Services,225,4
+226,Drain water entering homes basement flood emergency,Drainage,High,Municipal Services,226,3
+227,Gutter water on road stagnant mosquito breeding,Drainage,Medium,Municipal Services,227,6
+228,Sewer gas smell unbearable health hazard,Drainage,Medium,Municipal Services,228,8
+229,Drain construction incomplete work stopped pending,Drainage,Medium,Municipal Services,229,15
+230,Underground drainage damaged excavation needed repair,Drainage,High,Municipal Services,230,9
+231,Overflow mixing drinking water contamination risk,Drainage,High,Municipal Services,231,4
+232,Cleaning schedule not regular maintenance issue,Drainage,Low,Municipal Services,232,11
+233,Chamber cover broken accident risk children playing,Drainage,High,Municipal Services,233,3
+234,Drain capacity insufficient flooding during rain,Drainage,High,Municipal Services,234,6
+235,Silt accumulation blockage cleaning overdue pending,Drainage,Medium,Municipal Services,235,10
+236,Connection unauthorized illegal discharge action needed,Drainage,Medium,Municipal Services,236,12
+237,Slope improper backflow issue design fault,Drainage,Medium,Municipal Services,237,14
+238,Grating missing debris entering system blocking,Drainage,Medium,Municipal Services,238,8
+239,Pump failure sewage backup emergency repair needed,Drainage,High,Municipal Services,239,5
+240,Cross connection sewage drinking line mix emergency,Drainage,High,Municipal Services,240,4
+241,Power outage since morning no update waiting,Electricity,High,Power Department,241,4
+242,Electricity connection pending months application submitted,Electricity,Medium,Power Department,242,17
+243,Transformer noise loud overload sparking visible,Electricity,High,Power Department,243,3
+244,Meter box damaged rain water entry short circuit risk,Electricity,Medium,Power Department,244,8
+245,Wire sagging touching tree branches trim needed urgent,Electricity,Medium,Power Department,245,7
+246,Load shedding hours extended notice not given,Electricity,Medium,Power Department,246,9
+247,Bill incorrect meter faulty reading wrong dispute,Electricity,Low,Power Department,247,15
+248,Service wire broken storm damage hanging loose,Electricity,High,Power Department,248,4
+249,Pole foundation weak tilting may collapse soon,Electricity,High,Power Department,249,3
+250,Underground cable fault digging during road work,Electricity,High,Power Department,250,5
+251,Water supply irregular timing daily change happening,Water Supply,Medium,Water Department,251,10
+252,Tank empty boring pump failed no backup,Water Supply,High,Water Department,252,6
+253,Chlorine smell strong water treatment issue,Water Supply,Medium,Water Department,253,8
+254,Pipeline burst main road flooding traffic jam,Water Supply,High,Water Department,254,4
+255,Connection illegal neighbor unauthorized action required,Water Supply,High,Water Department,255,12
+256,Tanker service cancelled notice not given emergency,Water Supply,High,Water Department,256,5
+257,Meter seal broken tampering suspected check needed,Water Supply,Medium,Water Department,257,9
+258,Pressure zero top floors water not reaching,Water Supply,High,Water Department,258,4
+259,Quality test needed smell color abnormal health risk,Water Supply,High,Water Department,259,3
+260,Valve chamber flooded repair access problem,Water Supply,Medium,Water Department,260,7
+261,Garbage collection missed three consecutive days smell,Sanitation,Medium,Municipal Services,261,6
+262,Dustbin vandalized broken replacement urgent needed,Sanitation,Medium,Municipal Services,262,8
+263,Bio-waste mixing regular waste segregation not done,Sanitation,Medium,Municipal Services,263,9
+264,Sweeper van breakdown service disrupted alternative arrange,Sanitation,High,Municipal Services,264,5
+265,Public toilet water supply not available unusable condition,Sanitation,High,Municipal Services,265,6
+266,Garbage burning plastic fumes toxic health hazard,Sanitation,High,Municipal Services,266,7
+267,Collection timing clash school hours kids safety issue,Sanitation,Low,Municipal Services,267,11
+268,Bin overflow weekends service not happening problem,Sanitation,Medium,Municipal Services,268,7
+269,Compost pit full removal pending foul smell area,Sanitation,Medium,Municipal Services,269,10
+270,Dead cattle on road removal delayed reported,Sanitation,High,Municipal Services,270,2
+271,Road repair incomplete potholes refilled needed urgent,Roads,High,Municipal Services,271,8
+272,Footpath construction half done material blocking walking,Roads,Medium,Municipal Services,272,12
+273,Signboard missing junction accidents increasing install,Roads,High,Municipal Services,273,6
+274,Speed breaker damaged uneven vehicle damage happening,Roads,Medium,Municipal Services,274,9
+275,Divider plantation dead maintenance not happening,Roads,Low,Municipal Services,275,14
+276,Parking encroachment roadside illegal action required,Roads,Medium,Municipal Services,276,10
+277,Bridge expansion joint damaged vehicle bounce risk,Roads,High,Municipal Services,277,7
+278,Zebra marking faded visibility poor repaint needed,Roads,Low,Municipal Services,278,11
+279,Construction debris left road narrowed traffic problem,Roads,Medium,Municipal Services,279,9
+280,Culvert damaged flooding risk monsoon season emergency,Roads,High,Municipal Services,280,5
+281,Doctor strike outpatient closed patients suffering emergency,Health,High,Health Department,281,2
+282,Oxygen supply low critical patients risk immediate need,Health,High,Health Department,282,1
+283,Pharmacy closed timing irregular medicine not available,Health,Medium,Health Department,283,8
+284,Nurse shortage ward understaffed patient care poor,Health,High,Health Department,284,4
+285,Lab equipment breakdown test delay diagnosis affected,Health,High,Health Department,285,5
+286,Canteen food quality poor hygiene issue complaint,Health,Low,Health Department,286,10
+287,Bed shortage patients floor admitted unacceptable,Health,High,Health Department,287,3
+288,Dialysis machine malfunction emergency kidney patients risk,Health,High,Health Department,288,2
+289,Medicine substitution without consent patient complaint,Health,Medium,Health Department,289,7
+290,Waiting time excessive hours outpatient efficiency issue,Health,Medium,Health Department,290,9
+291,Land transfer bribe demanded money not given therefore pending,Corruption,High,Vigilance Department,291,25
+292,Certificate forgery racket exposed action not happened,Corruption,High,Vigilance Department,292,30
+293,Tender manipulation bribe cartel operation ongoing,Corruption,High,Vigilance Department,293,28
+294,Building approval bribe openly demanded architect complaint,Corruption,High,Vigilance Department,294,22
+295,Pension disbursement delay bribe demanding office,Corruption,Medium,Vigilance Department,295,16
+296,Recruitment malpractice money exchange selection process,Corruption,High,Vigilance Department,296,27
+297,Ration card bribe demanded document verification,Corruption,Medium,Vigilance Department,297,14
+298,Property tax assessment inflated bribe reduce to,Corruption,Medium,Vigilance Department,298,18
+299,License renewal delay bribe payment after approved,Corruption,High,Vigilance Department,299,15
+300,Audit report suppression bribe taken irregularities hidden,Corruption,High,Vigilance Department,300,24
+301,Street lamp entire row not working main circuit issue,Street Lighting,High,Municipal Services,301,6
+302,Solar panel vandalized theft battery missing replace urgent,Street Lighting,High,Municipal Services,302,8
+303,Light sensor malfunction daytime on night off reverse,Street Lighting,Medium,Municipal Services,303,10
+304,Junction light missing blind spot accident happened install,Street Lighting,High,Municipal Services,304,5
+305,Energy meter reading wrong overcharging streetlight bill,Street Lighting,Low,Municipal Services,305,13
+306,Pole rust corrosion structural integrity risk inspection,Street Lighting,Medium,Municipal Services,306,11
+307,Cable theft copper wire stolen lights not working,Street Lighting,High,Municipal Services,307,7
+308,Control panel damaged vandalism lights erratic repair,Street Lighting,Medium,Municipal Services,308,9
+309,LED flickering voltage stabilizer issue fix needed,Street Lighting,Medium,Municipal Services,309,8
+310,Coverage gap dark patch between poles light install,Street Lighting,Medium,Municipal Services,310,12
+311,Drainage grating stolen debris direct entry system blocked,Drainage,High,Municipal Services,311,5
+312,Sewer line collapse excavation road cave-in emergency,Drainage,High,Municipal Services,312,3
+313,Storm water drain capacity overflow design inadequate,Drainage,High,Municipal Services,313,6
+314,Septic connection illegal discharge sewage untreated action,Drainage,Medium,Municipal Services,314,12
+315,Pump station power failure backup not available overflow emergency,Drainage,High,Municipal Services,315,4
+316,Cross drain blockage culvert under road choked flooding,Drainage,High,Municipal Services,316,5
+317,Manhole explosion sewer gas buildup danger area evacuate,Drainage,High,Municipal Services,317,2
+318,Drain outlet blocked river discharge stagnant pollution,Drainage,Medium,Municipal Services,318,9
+319,Silt trap full cleaning overdue efficiency reduced system,Drainage,Medium,Municipal Services,319,11
+320,Drainage map outdated new construction location not known,Drainage,Low,Municipal Services,320,15

@@ -1,0 +1,31 @@
+# Core FastAPI
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# Validation
+pydantic==2.10.3
+
+# Authentication & Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+firebase-admin==6.5.0
+
+# Machine Learning
+scikit-learn==1.5.2
+joblib==1.4.2
+pandas==2.2.3
+numpy==2.2.1
+
+# Phase 4: Email Notifications
+aiosmtplib==3.0.1
+
+# Phase 4: Real-time Chat (WebSocket)
+python-socketio==5.11.0
+
+# Phase 4: File Operations
+aiofiles==23.2.1
