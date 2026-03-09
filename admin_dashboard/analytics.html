@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="sidebar">
+            <h2>SevaSetu Admin</h2>
+            <ul>
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="complaints.html">Complaints</a></li>
+                <li><a href="officers.html">Officers</a></li>
+                <li><a href="analytics.html" class="active">Analytics</a></li>
+            </ul>
+        </nav>
+        <main class="content">
+            <header>
+                <h1>Analytics & Reports</h1>
+            </header>
+            <div class="analytics-grid">
+                <div class="chart-card">
+                    <h3>Complaints by Category</h3>
+                    <div id="categoryChart"></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Resolution Time</h3>
+                    <div id="timeChart"></div>
+                </div>
+                <div class="chart-card">
+                    <h3>Monthly Trends</h3>
+                    <div id="trendChart"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
