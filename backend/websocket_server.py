@@ -10,7 +10,14 @@ from datetime import datetime
 # Create Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*'
+    cors_allowed_origins=[
+        'http://localhost:*',
+        'http://127.0.0.1:*',
+        'http://localhost',
+        'http://127.0.0.1'
+    ],
+    logger=True,
+    engineio_logger=True
 )
 
 # Store connected users

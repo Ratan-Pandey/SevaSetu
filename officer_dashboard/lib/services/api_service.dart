@@ -133,4 +133,58 @@ class ApiService {
       return null;
     }
   }
+
+  // ============================================================================
+  // REAL-TIME CHAT
+  // ============================================================================
+
+  /// Get chat messages for a complaint
+  Future<List<dynamic>?> getChatMessages(int complaintId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/$complaintId/messages'),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Get chat messages error: $e');
+      return null;
+    }
+  }
+
+  /// Send chat message
+  Future<bool> sendChatMessage(int complaintId, Map<String, dynamic> messageData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/chat/$complaintId/send'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(messageData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Send chat message error: $e');
+      return false;
+    }
+  }
+
+  /// Get unread chat message count
+  Future<int> getUnreadChatCount(int complaintId, String userType) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/$complaintId/unread-count?user_type=$userType'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['unread_count'] ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print('Get unread count error: $e');
+      return 0;
+    }
+  }
 }

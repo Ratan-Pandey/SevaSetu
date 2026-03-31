@@ -11,6 +11,7 @@ import '../../services/location_service.dart';
 import '../../services/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ComplaintFormScreen extends StatefulWidget {
   final String department;
@@ -442,73 +443,101 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
                         const SizedBox(height: 20),
 
                         // Image Selection UI
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300),
+Container(
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Colors.grey.shade50,
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(color: Colors.grey.shade300),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Add Photo Evidence (Optional)',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 12),
+
+      if (_selectedImage != null) ...[
+        Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: kIsWeb
+                  ? Image.network(
+                      _selectedImage!.path,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: Text(
+                              'Image preview not available on web',
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Add Photo Evidence (Optional)', 
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 12),
-                              if (_selectedImage != null) ...[
-                                Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.file(_selectedImage!, 
-                                        height: 200, width: double.infinity, fit: BoxFit.cover),
-                                    ),
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: CircleAvatar(
-                                        backgroundColor: Colors.white,
-                                        child: IconButton(
-                                          onPressed: () => setState(() => _selectedImage = null),
-                                          icon: const Icon(Icons.delete, color: Colors.red),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ] else ...[
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: () => _pickImage(ImageSource.gallery),
-                                        icon: const Icon(Icons.photo_library),
-                                        label: const Text('Gallery'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.white,
-                                          foregroundColor: Colors.blue,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: () => _pickImage(ImageSource.camera),
-                                        icon: const Icon(Icons.camera_alt),
-                                        label: const Text('Camera'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.white,
-                                          foregroundColor: Colors.blue,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                        );
+                      },
+                    )
+                  : Image.file(
+                      _selectedImage!,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+            ),
+
+            // Delete Button
+            Positioned(
+              top: 8,
+              right: 8,
+              child: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: IconButton(
+                  onPressed: () => setState(() => _selectedImage = null),
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ] else ...[
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Gallery'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Camera'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ],
+  ),
+),
+
+const SizedBox(height: 20),
 
                         // Location Selection UI
                         Container(

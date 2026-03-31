@@ -20,7 +20,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final ChatService _chatService = ChatService();
+  final ChatService _chatService = ChatService(serverUrl: ApiService.baseUrl);
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
@@ -47,7 +47,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _connectToChat() {
     final authService = Provider.of<AuthService>(context, listen: false);
-    final officerId = authService.currentUser?['id'];
+    final officerId = authService.currentUser?['user_id'];
     
     if (officerId != null) {
       _chatService.connect(widget.complaintId, officerId, 'officer');
@@ -86,7 +86,7 @@ class _ChatScreenState extends State<ChatScreen> {
     
     final authService = Provider.of<AuthService>(context, listen: false);
     final apiService = Provider.of<ApiService>(context, listen: false);
-    final officerId = authService.currentUser?['id'];
+    final officerId = authService.currentUser?['user_id'];
     
     if (officerId == null) return;
     

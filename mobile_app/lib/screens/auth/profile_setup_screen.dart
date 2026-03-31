@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../user/user_dashboard.dart';
@@ -16,10 +20,47 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _dobController = TextEditingController(); // ✅ NEW
+  final _aadhaarController = TextEditingController(); // ✅ NEW
   final _pincodeController = TextEditingController();
   final _cityController = TextEditingController();
   final _stateController = TextEditingController();
+  File? _aadhaarImage; // ✅ NEW
+  DateTime? _selectedDOB; // ✅ NEW
   bool _isLoading = false;
+
+  // ✅ ADD DOB Picker
+  Future<void> _selectDOB() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDOB = picked;
+        _dobController.text = "${picked.day}/${picked.month}/${picked.year}";
+      });
+    }
+  }
+
+  // ✅ ADD Aadhaar Image Picker
+  Future<void> _pickAadhaarImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+
+    if (image != null) {
+      setState(() {
+        _aadhaarImage = File(image.path);
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -32,12 +73,20 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_aadhaarImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        _buildSnackBar('Please upload Aadhaar card', Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    
+
     final authService = Provider.of<AuthService>(context, listen: false);
     final apiService = Provider.of<ApiService>(context, listen: false);
     final userId = authService.getUserId();
-    
+
     if (userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         _buildSnackBar('User ID not found', Colors.red),
@@ -45,30 +94,48 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       setState(() => _isLoading = false);
       return;
     }
-    
-    final result = await apiService.updateProfile(userId, {
-      'name': _nameController.text.trim(),
-      'phone_number': _phoneController.text.trim(),
-      'address': _addressController.text.trim(),
-      'pincode': _pincodeController.text.trim(),
-      'city': _cityController.text.trim(),
-      'state': _stateController.text.trim(),
-    });
-    
-    if (!mounted) return;
-    
-    if (result != null) {
-      authService.updateProfileStatus(true);
+
+    try {
+      // Upload Aadhaar image logic (simulated for now, path would come from backend)
+      String? aadhaarPath;
+      if (_aadhaarImage != null) {
+        // In a real app, we'd upload this file via ApiService and get a path back
+        // For now, we'll proceed with the metadata
+      }
+
+      final result = await apiService.updateProfile(userId, {
+        'name': _nameController.text.trim(),
+        'phone_number': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'dob': _selectedDOB?.toIso8601String(), // ✅ NEW
+        'aadhaar_number': _aadhaarController.text.trim(), // ✅ NEW
+        'aadhaar_image_path': aadhaarPath, // ✅ NEW
+        'profile_completed': true,
+      });
+
+      if (!mounted) return;
+
+      if (result != null) {
+        authService.updateProfileStatus(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          _buildSnackBar('Profile saved successfully!', Colors.green),
+        );
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const UserDashboard()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          _buildSnackBar('Failed to save profile', Colors.red),
+        );
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        _buildSnackBar('Profile saved successfully!', Colors.green),
-      );
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const UserDashboard()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        _buildSnackBar('Failed to save profile', Colors.red),
+        _buildSnackBar('Error: $e', Colors.red),
       );
       setState(() => _isLoading = false);
     }
@@ -178,12 +245,82 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           validator: (v) => v?.length != 10 ? 'Enter valid 10-digit number' : null,
                         ),
                         const SizedBox(height: 18),
+                        // Date of Birth Field
+                        _buildTextField(
+                          controller: _dobController,
+                          label: 'Date of Birth (DOB) *',
+                          icon: Icons.calendar_today,
+                          hintText: 'DD/MM/YYYY',
+                          readOnly: true,
+                          onTap: _selectDOB,
+                          validator: (v) => v?.isEmpty ?? true ? 'Date of Birth is required' : null,
+                        ),
+                        const SizedBox(height: 18),
+                        // Aadhaar Number Field
+                        _buildTextField(
+                          controller: _aadhaarController,
+                          label: 'Aadhaar Number *',
+                          icon: Icons.credit_card,
+                          hintText: 'XXXX XXXX XXXX',
+                          keyboardType: TextInputType.number,
+                          maxLength: 12,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Aadhaar is required';
+                            if (v.length != 12) return 'Must be 12 digits';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        // Aadhaar Upload
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Upload Aadhaar Card (Front) *',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (_aadhaarImage != null)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(_aadhaarImage!, height: 150, width: double.infinity, fit: BoxFit.cover),
+                                ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: _pickAadhaarImage,
+                                icon: const Icon(Icons.upload_file),
+                                label: Text(_aadhaarImage == null ? 'Choose Image' : 'Change Image'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF667eea),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
                         _buildTextField(
                           controller: _addressController,
-                          label: 'Address',
-                          icon: Icons.home,
+                          label: 'Complete Address *',
+                          icon: Icons.location_on,
+                          hintText: 'House No., Street, City, State, PIN',
                           maxLines: 3,
-                          validator: (v) => v?.trim().isEmpty ?? true ? 'Address is required' : null,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Address is required';
+                            if (v.trim().length < 20) return 'Please enter complete address';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 18),
                         Row(
@@ -280,6 +417,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    String? hintText,
+    bool readOnly = false,
+    VoidCallback? onTap,
     TextInputType? keyboardType,
     int maxLines = 1,
     int? maxLength,
@@ -301,6 +441,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         controller: controller,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hintText,
           prefixIcon: Icon(icon, color: const Color(0xFF667eea)),
           filled: true,
           fillColor: Colors.white,
@@ -325,8 +466,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             borderSide: const BorderSide(color: Colors.red, width: 2),
           ),
           counterText: '',
+          suffixIcon: onTap != null ? IconButton(icon: const Icon(Icons.edit_calendar, color: Color(0xFF667eea)), onPressed: onTap) : null,
         ),
         keyboardType: keyboardType,
+        readOnly: readOnly,
+        onTap: onTap,
         maxLines: maxLines,
         maxLength: maxLength,
         validator: validator,
@@ -339,6 +483,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _dobController.dispose();
+    _aadhaarController.dispose();
     _pincodeController.dispose();
     _cityController.dispose();
     _stateController.dispose();

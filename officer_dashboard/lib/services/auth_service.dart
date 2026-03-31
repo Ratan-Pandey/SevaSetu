@@ -8,6 +8,7 @@ class AuthService extends ChangeNotifier {
   String? _error;
 
   Map<String, dynamic>? get officerData => _officerData;
+  Map<String, dynamic>? get currentUser => _officerData;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _officerData != null;

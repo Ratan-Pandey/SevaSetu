@@ -43,7 +43,7 @@ def update_user_profile(db: Session, user_id: int, **kwargs) -> User:
             setattr(user, key, value)
     
     # Mark profile as completed if all fields filled
-    if all([user.phone_number, user.address, user.pincode, user.city, user.state]):
+    if all([user.phone_number, user.address, user.pincode, user.city, user.state, user.dob, user.aadhaar_number]):
         user.profile_completed = True
     
     db.commit()

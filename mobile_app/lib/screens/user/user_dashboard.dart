@@ -89,6 +89,7 @@ class _DashboardHomeState extends State<DashboardHome> {
   int _totalComplaints = 0;
   int _unreadNotifications = 0;
   bool _isLoading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {

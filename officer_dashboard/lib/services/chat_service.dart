@@ -2,9 +2,12 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class ChatService {
   IO.Socket? socket;
-  
+  final String serverUrl;
+
+  ChatService({required this.serverUrl});
+
   void connect(int complaintId, int userId, String userType) {
-    socket = IO.io('http://127.0.0.1:8000', <String, dynamic>{
+    socket = IO.io(serverUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });

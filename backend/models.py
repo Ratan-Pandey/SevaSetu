@@ -5,7 +5,7 @@ Authentication: Firebase (Google Sign-in) for users, Email/Password for officers
 Language: English only
 """
 
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Boolean, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -34,6 +34,9 @@ class User(Base):
     pincode = Column(String(10), nullable=True)
     city = Column(String(50), nullable=True)
     state = Column(String(50), nullable=True)
+    dob = Column(Date, nullable=True)  # ✅ NEW
+    aadhaar_number = Column(String(12), unique=True, nullable=True)  # ✅ NEW
+    aadhaar_image_path = Column(String(255), nullable=True)  # ✅ NEW
     
     # Status
     is_active = Column(Boolean, default=True)

@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation
 """
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 # ===== AUTH SCHEMAS =====
@@ -45,6 +45,9 @@ class UserProfileUpdate(BaseModel):
     pincode: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    dob: Optional[date] = None # ✅ NEW
+    aadhaar_number: Optional[str] = None # ✅ NEW
+    aadhaar_image_path: Optional[str] = None # ✅ NEW
 
 
 class UserProfileResponse(BaseModel):
@@ -58,6 +61,9 @@ class UserProfileResponse(BaseModel):
     pincode: Optional[str]
     city: Optional[str]
     state: Optional[str]
+    dob: Optional[date] # ✅ NEW
+    aadhaar_number: Optional[str] # ✅ NEW
+    aadhaar_image_path: Optional[str] # ✅ NEW
     profile_completed: bool
     created_at: datetime
 

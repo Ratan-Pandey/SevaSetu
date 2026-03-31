@@ -1,3 +1,52 @@
+import re
+
+EMERGENCY_KEYWORDS = [
+    'emergency', 'urgent', 'critical', 'danger', 'fire',
+    'death', 'injury', 'immediately', 'asap', 'help'
+]
+
+# Time-based urgency keywords
+TIME_URGENCY_KEYWORDS = {
+    'high': ['hours', 'hour', 'minutes', 'minute', 'days ago', 'weeks', 'week'],
+    'medium': ['today', 'yesterday', 'days', 'day'],
+    'low': ['month', 'months']
+}
+
+def detect_urgency_from_time(text: str) -> str:
+    """Detect urgency based on time mentions"""
+    text_lower = text.lower()
+    
+    # Check for emergency keywords first
+    if any(keyword in text_lower for keyword in EMERGENCY_KEYWORDS):
+        return 'High'
+    
+    # Check for time-based urgency
+    if 'hour' in text_lower or 'minute' in text_lower:
+        # Extract number before 'hour' or 'minute'
+        hours_match = re.search(r'(\d+)\s*(hour|hours|minute|minutes)', text_lower)
+        if hours_match:
+            number = int(hours_match.group(1))
+            if number <= 24:  # Within 24 hours
+                return 'High'
+            elif number <= 72:  # Within 3 days
+                return 'Medium'
+    
+    if 'week' in text_lower or 'weeks' in text_lower:
+        return 'High'  # Long-standing issue
+    
+    if 'day' in text_lower or 'days' in text_lower:
+        days_match = re.search(r'(\d+)\s*(day|days)', text_lower)
+        if days_match:
+            number = int(days_match.group(1))
+            if number >= 5:  # 5+ days
+                return 'High'
+            elif number >= 2:  # 2-4 days
+                return 'Medium'
+            else:  # 1 day
+                return 'Medium'
+    
+    return None  # Let ML model decide
+
 def apply_urgency_rules(text: str, predicted_urgency: str) -> str:
     """
     Apply rule-based urgency detection with English and Hinglish keyword support.
@@ -11,6 +60,11 @@ def apply_urgency_rules(text: str, predicted_urgency: str) -> str:
         Final urgency level after rule application
     """
     text_lower = text.lower()
+
+    # Rule 0: New Time-based Urgency Logic
+    time_urgency = detect_urgency_from_time(text)
+    if time_urgency:
+        return time_urgency
 
     # ===== HIGH URGENCY KEYWORDS =====
     high_keywords = [
@@ -90,17 +144,21 @@ if __name__ == "__main__":
         ("Rishwat maang rahe certificate ke liye", "Low", "High"),
         ("Water leakage issue pending", "Low", "Medium"),
         ("Street light not working", "Low", "Low"),
+        ("No water for 5 hours", "Low", "High"),
+        ("Electricity off for 5 days", "Low", "High"),
+        ("Water gone for 2 days", "Low", "Medium"),
+        ("Resolved since 2 weeks", "Low", "High"),
         ("Emergency hai paani band hai", "Low", "High"),
         ("Kharab meter reading galat", "Low", "Medium"),
         ("Pole girne wala hai danger", "Medium", "High"),
     ]
     
     print("=" * 70)
-    print("TESTING URGENCY RULES (English + Hinglish)")
+    print("TESTING URGENCY RULES (Enhanced with Time Mentions)")
     print("=" * 70)
     
     for text, ml_pred, expected in test_cases:
         result = apply_urgency_rules(text, ml_pred)
-        status = "✅" if result == expected else "❌"
-        print(f"\n{status} Text: {text}")
+        status = "PASS" if result == expected else "FAIL"
+        print(f"\n[{status}] Text: {text}")
         print(f"   ML: {ml_pred} → Rule: {result} (Expected: {expected})")

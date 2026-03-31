@@ -1,6 +1,6 @@
 import os
 import joblib
-from ai.urgency_rules import apply_urgency_rules
+from ai.urgency_rules import apply_urgency_rules, detect_urgency_from_time
 
 # ===== CATEGORY TO DEPARTMENT MAPPING =====
 # 8 Categories → 5 Departments
@@ -58,11 +58,15 @@ def analyze_complaint(text: str) -> dict:
     )
     
     # ---------- STEP 3: URGENCY PREDICTION (ML + Rules) ----------
-    text_vector_urg = urgency_vectorizer.transform([text])
-    ml_urgency = urgency_model.predict(text_vector_urg)[0]
-    
-    # Apply rule-based override (catches keywords like "emergency", "rishwat", etc.)
-    final_urgency = apply_urgency_rules(text, ml_urgency)
+    # Urgency prediction with time-based enhancement
+    urgency_from_time = detect_urgency_from_time(text)
+    if urgency_from_time:
+        final_urgency = urgency_from_time
+    else:
+        # Fallback to ML model and other rules
+        text_vector_urg = urgency_vectorizer.transform([text])
+        ml_urgency = urgency_model.predict(text_vector_urg)[0]
+        final_urgency = apply_urgency_rules(text, ml_urgency)
 
     # ---------- STEP 4: DELAY RISK PREDICTION ----------
     encoded_features = [[

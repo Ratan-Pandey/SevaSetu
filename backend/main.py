@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Optional
+from pydantic import BaseModel
 import models
 from database import engine, get_db
 from models import Base
@@ -19,7 +20,7 @@ from fastapi import File, UploadFile
 from fastapi.staticfiles import StaticFiles
 import shutil
 import time
-from models import Complaint, User, ChatMessage
+from models import Complaint, User, ChatMessage, ComplaintRating, Officer, ComplaintUpdate, Notification
 import firebase_admin
 from firebase_admin import credentials, messaging
 import aiosmtplib
@@ -27,6 +28,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import socketio
 from websocket_server import sio
+
+
+# Request Schemas for Validation
+class ComplaintStatusUpdate(BaseModel):
+    status: str
+    update_text: str
+    officer_id: int
 
 
 # Initialize Firebase
@@ -87,10 +95,11 @@ async def send_email(to_email: str, subject: str, body: str):
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production: specify exact origins
+    allow_origins=["*"],  # ✅ Allow all
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Create database tables
@@ -189,12 +198,7 @@ def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session
     user = crud.update_user_profile(
         db=db,
         user_id=user_id,
-        name=profile.name,
-        phone_number=profile.phone_number,
-        address=profile.address,
-        pincode=profile.pincode,
-        city=profile.city,
-        state=profile.state
+        **profile.dict(exclude_unset=True)
     )
     
     return user
@@ -209,6 +213,26 @@ async def submit_complaint(
     db: Session = Depends(get_db)
 ):
     """Submit new complaint with AI analysis"""
+    
+    # ✅ CHECK FOR DUPLICATE UNRESOLVED COMPLAINTS
+    similar_text = complaint.text.strip().lower()
+    department = complaint.selected_department
+    
+    # Check for existing unresolved complaint with similar text
+    existing = db.query(Complaint).filter(
+        Complaint.user_id == user_id,
+        Complaint.selected_department == department,
+        Complaint.status.in_(['submitted', 'under_review', 'in_progress'])
+    ).all()
+    
+    for existing_complaint in existing:
+        if existing_complaint.text.strip().lower() == similar_text:
+            raise HTTPException(
+                status_code=409,
+                detail=f"You already have an unresolved complaint in {department} department "
+                       f"(Tracking ID: {existing_complaint.tracking_id}). Please wait for resolution "
+                       f"or check 'My Complaints'."
+            )
     
     # Run AI analysis
     ai_result = analyze_complaint(complaint.text)
@@ -267,6 +291,66 @@ async def submit_complaint(
         )
     
     return new_complaint
+
+
+
+
+@app.get("/complaints/user/{user_id}")
+async def get_user_complaints(user_id: int, db: Session = Depends(get_db)):
+    """Get all complaints for a specific user"""
+    
+    complaints = db.query(Complaint).filter(
+        Complaint.user_id == user_id
+    ).order_by(Complaint.created_at.desc()).all()
+    
+    if not complaints:
+        return []
+    
+    result = []
+    for complaint in complaints:
+        # Get officer info
+        officer = None
+        if complaint.assigned_officer_id:
+            officer_data = db.query(Officer).filter(
+                Officer.id == complaint.assigned_officer_id
+            ).first()
+            if officer_data:
+                officer = {
+                    "id": officer_data.id,
+                    "name": officer_data.name,
+                    "email": officer_data.email,
+                    "department": officer_data.department
+                }
+        
+        # Get latest update
+        latest_update = db.query(ComplaintUpdate).filter(
+            ComplaintUpdate.complaint_id == complaint.id
+        ).order_by(ComplaintUpdate.created_at.desc()).first()
+        
+        result.append({
+            "id": complaint.id,
+            "tracking_id": complaint.tracking_id,
+            "text": complaint.text,
+            "selected_department": complaint.selected_department,
+            "ai_category": complaint.ai_category,
+            "ai_department": complaint.ai_department,
+            "ai_urgency": complaint.ai_urgency,
+            "status": complaint.status,
+            "image_path": complaint.image_path,
+            "audio_path": complaint.audio_path,
+            "latitude": complaint.latitude,
+            "longitude": complaint.longitude,
+            "location_address": complaint.location_address,  # ✅ FIXED
+            "delay_risk_label": complaint.delay_risk_label,
+            "created_at": complaint.created_at.isoformat(),
+            "officer": officer,
+            "latest_update": {
+                "update_text": latest_update.update_text if latest_update else None,
+                "created_at": latest_update.created_at.isoformat() if latest_update else None
+            } if latest_update else None
+        })
+    
+    return result
 
 
 @app.post("/complaints/{complaint_id}/upload-image")
@@ -333,38 +417,64 @@ def get_complaint_detail(complaint_id: int, db: Session = Depends(get_db)):
 # ===== OFFICER ROUTES =====
 
 @app.get("/officer/dashboard/{officer_id}")
-def officer_dashboard(officer_id: int, db: Session = Depends(get_db)):
+async def officer_dashboard(officer_id: int, db: Session = Depends(get_db)):
     """Get officer dashboard statistics"""
-    from models import Officer
-    officer = db.query(Officer).filter(Officer.id == officer_id).first()
     
+    # Get officer
+    officer = db.query(Officer).filter(Officer.id == officer_id).first()
     if not officer:
         raise HTTPException(status_code=404, detail="Officer not found")
     
-    from models import Complaint
+    # Total complaints (assigned to me OR unassigned in my department)
+    total_complaints = db.query(Complaint).filter(
+        (Complaint.assigned_officer_id == officer_id) | 
+        ((Complaint.assigned_officer_id.is_(None)) & (Complaint.ai_department == officer.department))
+    ).count()
     
-    # Get stats for officer's department
-    total = db.query(Complaint).filter(Complaint.final_department == officer.department).count()
-    assigned = db.query(Complaint).filter(Complaint.assigned_officer_id == officer_id).count()
+    # Pending (unresolved in department)
     pending = db.query(Complaint).filter(
-        Complaint.final_department == officer.department,
+        (Complaint.assigned_officer_id == officer_id) | 
+        ((Complaint.assigned_officer_id.is_(None)) & (Complaint.ai_department == officer.department)),
         Complaint.status == 'submitted'
     ).count()
+    
+    # In Progress (assigned and under review/in progress)
     in_progress = db.query(Complaint).filter(
         Complaint.assigned_officer_id == officer_id,
-        Complaint.status == 'in_progress'
+        Complaint.status.in_(['under_review', 'in_progress'])
     ).count()
+    
+    # Resolved
     resolved = db.query(Complaint).filter(
         Complaint.assigned_officer_id == officer_id,
         Complaint.status == 'resolved'
     ).count()
     
+    # Average Resolution Time
+    resolved_complaints = db.query(Complaint).filter(
+        Complaint.assigned_officer_id == officer_id,
+        Complaint.status == 'resolved'
+    ).all()
+    
+    avg_resolution_time = 0
+    if resolved_complaints:
+        total_time = sum([
+            (c.updated_at - c.created_at).days 
+            for c in resolved_complaints 
+            if c.updated_at
+        ])
+        avg_resolution_time = round(total_time / len(resolved_complaints), 1)
+    
     return {
-        "total_complaints": total,
-        "assigned_to_me": assigned,
+        "officer_id": officer_id,
+        "officer_name": officer.name,
+        "officer_email": officer.email,
+        "department": officer.department,
+        "total_complaints": total_complaints,
         "pending": pending,
         "in_progress": in_progress,
-        "resolved": resolved
+        "resolved": resolved,
+        "avg_resolution_time": avg_resolution_time
     }
 
 
@@ -420,44 +530,69 @@ async def assign_to_me(complaint_id: int, officer_id: int, db: Session = Depends
     return {"message": "Complaint assigned successfully", "complaint": complaint}
 
 
-@app.put("/officer/complaints/{complaint_id}/update")
-async def update_status(
-    complaint_id: int,
-    officer_id: int,
-    update: schemas.ComplaintUpdateRequest,
+@app.put("/officer/complaints/{id}/update")
+async def update_complaint_status(
+    id: int,
+    update_data: ComplaintStatusUpdate,  # ✅ Use Pydantic model
     db: Session = Depends(get_db)
 ):
-    """Update complaint status and add comment"""
-    new_status = update.new_status or 'in_progress'
+    """Update complaint status by officer"""
+    # Get complaint
+    complaint = db.query(Complaint).filter(Complaint.id == id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
     
-    update_record = crud.update_complaint_status(
-        db=db,
-        complaint_id=complaint_id,
-        officer_id=officer_id,
-        new_status=new_status,
-        update_text=update.update_text
+    # Track status change
+    old_status = complaint.status
+    
+    # Update status
+    complaint.status = update_data.status
+    
+    # Create update record
+    complaint_update = ComplaintUpdate(
+        complaint_id=id,
+        officer_id=update_data.officer_id,
+        status_changed_from=old_status,
+        status_changed_to=update_data.status,
+        update_text=update_data.update_text
     )
+    db.add(complaint_update)
     
-    # Send Email Notification
-    complaint = db.query(models.Complaint).filter(models.Complaint.id == complaint_id).first()
-    if complaint and complaint.user_id:
-        user = db.query(models.User).filter(models.User.id == complaint.user_id).first()
+    # Assign officer if not assigned
+    if not complaint.assigned_officer_id:
+        complaint.assigned_officer_id = update_data.officer_id
+    
+    db.commit()
+    db.refresh(complaint)
+    
+    # Send notification to user
+    try:
+        from models import Notification
+        notification = Notification(
+            user_id=complaint.user_id,
+            complaint_id=id,
+            title=f"Complaint {complaint.tracking_id} Updated",
+            message=f"Status: {update_data.status}. {update_data.update_text}",
+            notification_type="status_update"
+        )
+        db.add(notification)
+        db.commit()
+    except Exception as e:
+        print(f"Notification error: {e}")
+    
+    # Send email notification asynchronously
+    try:
+        user = db.query(User).filter(User.id == complaint.user_id).first()
         if user and user.email:
             await send_email(
                 user.email,
                 f"Complaint {complaint.tracking_id} Updated",
-                f"""
-                <h2>Dear {user.name},</h2>
-                <p>Your complaint has been updated.</p>
-                <p><strong>Tracking ID:</strong> {complaint.tracking_id}</p>
-                <p><strong>New Status:</strong> {new_status}</p>
-                <p><strong>Update:</strong> {update.update_text}</p>
-                <br>
-                <p>Thank you for your patience.</p>
-                """
+                f"<h2>Dear {user.name},</h2><p>Your complaint status has been updated to: <b>{update_data.status}</b>.</p><p>Update: {update_data.update_text}</p>"
             )
+    except Exception as e:
+        print(f"Email error: {e}")
     
-    return {"message": "Complaint updated successfully", "update": update_record}
+    return {"success": True, "message": "Status updated successfully"}
 
 
 # ===== NOTIFICATION ROUTES =====
@@ -540,24 +675,53 @@ async def rate_complaint(
 # ===== ANALYTICS ROUTES (from old system) =====
 
 @app.get("/analytics/summary")
-def analytics_summary(db: Session = Depends(get_db)):
-    """General analytics"""
+async def get_analytics_summary(db: Session = Depends(get_db)):
+    """Get system-wide analytics - REAL DATA"""
     from sqlalchemy import func
-    from models import Complaint
     
-    total = db.query(Complaint).count()
-    high_urgency = db.query(Complaint).filter(Complaint.ai_urgency == "High").count()
+    # REAL counts from database
+    total_complaints = db.query(Complaint).count()
+    total_users = db.query(User).filter(User.profile_completed == True).count()
+    total_officers = db.query(Officer).count()
     
-    category_counts = (
+    # Status breakdown (matching database lowercase convention)
+    pending = db.query(Complaint).filter(Complaint.status == 'submitted').count()
+    in_progress = db.query(Complaint).filter(
+        Complaint.status.in_(['under_review', 'in_progress'])
+    ).count()
+    resolved = db.query(Complaint).filter(Complaint.status == 'resolved').count()
+    
+    # Department breakdown (dynamic)
+    dept_counts = (
+        db.query(Complaint.selected_department, func.count(Complaint.selected_department))
+        .group_by(Complaint.selected_department)
+        .all()
+    )
+    departments = {dept: count for dept, count in dept_counts if dept}
+    
+    # Category breakdown (dynamic)
+    cat_counts = (
         db.query(Complaint.ai_category, func.count(Complaint.ai_category))
         .group_by(Complaint.ai_category)
         .all()
     )
+    categories = {cat: count for cat, count in cat_counts if cat}
+    
+    # Average rating from ComplaintRating
+    avg_rating_query = db.query(func.avg(ComplaintRating.rating)).scalar()
+    avg_rating = float(avg_rating_query) if avg_rating_query else 0
     
     return {
-        "total_complaints": total,
-        "high_urgency": high_urgency,
-        "by_category": {cat: count for cat, count in category_counts if cat}
+        "total_complaints": total_complaints,
+        "total_users": total_users,
+        "total_officers": total_officers,
+        "pending": pending,
+        "in_progress": in_progress,
+        "resolved": resolved,
+        "departments": departments,
+        "categories": categories,
+        "avg_rating": round(avg_rating, 2),
+        "resolution_rate": round((resolved / total_complaints * 100) if total_complaints > 0 else 0, 1)
     }
 
 
@@ -749,7 +913,7 @@ async def rate_complaint(
 @app.get("/complaints/{complaint_id}/rating")
 async def get_complaint_rating(complaint_id: int, db: Session = Depends(get_db)):
     """Get rating for a complaint"""
-    rating = db.query(Rating).filter(Rating.complaint_id == complaint_id).first()
+    rating = db.query(ComplaintRating).filter(ComplaintRating.complaint_id == complaint_id).first()
     if not rating:
         return {"rated": False}
     
