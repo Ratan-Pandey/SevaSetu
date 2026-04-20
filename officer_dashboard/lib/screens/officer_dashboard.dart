@@ -334,6 +334,17 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   Widget _buildRecentComplaintCard(Map<String, dynamic> complaint) {
+    String priority = complaint['priority_label'] ?? 'Low';
+
+    Color priorityColor;
+    if (priority == 'High') {
+      priorityColor = Colors.red;
+    } else if (priority == 'Medium') {
+      priorityColor = Colors.orange;
+    } else {
+      priorityColor = Colors.green;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -347,12 +358,13 @@ class _DashboardHomeState extends State<DashboardHome> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
+              color: priorityColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.description, color: Colors.blue.shade700),
+            child: Icon(Icons.priority_high, color: priorityColor),
           ),
           const SizedBox(width: 16),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,7 +389,23 @@ class _DashboardHomeState extends State<DashboardHome> {
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey.shade400),
+
+          // 🔥 PRIORITY BADGE
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: priorityColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              priority,
+              style: TextStyle(
+                color: priorityColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
         ],
       ),
     );

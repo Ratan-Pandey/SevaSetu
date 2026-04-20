@@ -1,6 +1,4 @@
-import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,7 +23,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _pincodeController = TextEditingController();
   final _cityController = TextEditingController();
   final _stateController = TextEditingController();
-  File? _aadhaarImage; // ✅ NEW
+  XFile? _aadhaarImage; // ✅ Updated type
   DateTime? _selectedDOB; // ✅ NEW
   bool _isLoading = false;
 
@@ -57,7 +55,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     if (image != null) {
       setState(() {
-        _aadhaarImage = File(image.path);
+        _aadhaarImage = image;
       });
     }
   }
@@ -293,7 +291,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                               if (_aadhaarImage != null)
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(_aadhaarImage!, height: 150, width: double.infinity, fit: BoxFit.cover),
+                                  child: kIsWeb
+                                      ? Image.network(_aadhaarImage!.path, height: 150, width: double.infinity, fit: BoxFit.cover)
+                                      : Image.network(_aadhaarImage!.path, height: 150, width: double.infinity, fit: BoxFit.cover), // path is fine on mobile too for XFile
                                 ),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(

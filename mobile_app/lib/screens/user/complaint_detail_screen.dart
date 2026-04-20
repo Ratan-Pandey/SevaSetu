@@ -9,8 +9,13 @@ import 'package:audioplayers/audioplayers.dart';
 
 class ComplaintDetailScreen extends StatefulWidget {
   final int complaintId;
+  final Map<String, dynamic>? initialData;
 
-  const ComplaintDetailScreen({super.key, required this.complaintId});
+  const ComplaintDetailScreen({
+    super.key,
+    required this.complaintId,
+    this.initialData,
+  });
 
   @override
   State<ComplaintDetailScreen> createState() => _ComplaintDetailScreenState();
@@ -30,6 +35,10 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialData != null) {
+      _data = {"complaint": widget.initialData};
+      _isLoading = false;
+    }
     _loadDetail();
 
     _audioPlayer.onPlayerStateChanged.listen((state) {
@@ -206,6 +215,55 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                   ),
                                   const SizedBox(height: 20),
 
+                                  if (_data!['complaint']['priority_explanation'] != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 20),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.orange.withOpacity(0.15),
+                                            Colors.deepOrange.withOpacity(0.05),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(color: Colors.orange.withOpacity(0.6)),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.orange.withOpacity(0.2),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: const [
+                                              Icon(Icons.psychology, color: Colors.orange),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                "AI Insight",
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            _data!['complaint']['priority_explanation'],
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
                                   // Complaint Description
                                   Container(
                                     padding: const EdgeInsets.all(20),
@@ -250,53 +308,135 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                   ),
                                   const SizedBox(height: 20),
 
-                                  // Chat with Officer Button (if assigned)
-                                  if (_data!['assigned_officer'] != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 20),
-                                      child: Container(
-                                        width: double.infinity,
-                                        height: 52,
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                                          ),
-                                          borderRadius: BorderRadius.circular(16),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF667eea).withOpacity(0.3),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                                  // Progress Timeline
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.grey.withOpacity(0.1),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
                                         ),
-                                        child: ElevatedButton.icon(
-                                          onPressed: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => ChatScreen(
-                                                  complaintId: widget.complaintId,
-                                                  trackingId: _data!['complaint']['tracking_id'],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.chat_bubble, color: Colors.white),
-                                          label: const Text(
-                                            'Chat with Officer',
-                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "Progress Timeline",
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
                                           ),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.transparent,
-                                            shadowColor: Colors.transparent,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        _buildTimelineStep(
+                                          "Submitted", 
+                                          true
+                                        ),
+                                        _buildTimelineStep(
+                                          "Under Review",
+                                          _data!['complaint']['status'] == "under_review" ||
+                                          _data!['complaint']['status'] == "in_progress" ||
+                                          _data!['complaint']['status'] == "resolved"
+                                        ),
+                                        _buildTimelineStep(
+                                          "In Progress",
+                                          _data!['complaint']['status'] == "in_progress" ||
+                                          _data!['complaint']['status'] == "resolved"
+                                        ),
+                                        _buildTimelineStep(
+                                          "Resolved",
+                                          _data!['complaint']['status'] == "resolved"
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  // Chat with Officer Button Section
+                                  Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Container(
+                                          width: double.infinity,
+                                          height: 52,
+                                          decoration: BoxDecoration(
+                                            gradient: _data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted"
+                                                ? const LinearGradient(
+                                                    colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                                                  )
+                                                : null,
+                                            color: _data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted"
+                                                ? null
+                                                : Colors.grey[300],
+                                            borderRadius: BorderRadius.circular(16),
+                                            boxShadow: _data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted"
+                                                ? [
+                                                    BoxShadow(
+                                                      color: const Color(0xFF667eea).withOpacity(0.3),
+                                                      blurRadius: 10,
+                                                      offset: const Offset(0, 4),
+                                                    ),
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: ElevatedButton.icon(
+                                            onPressed: (_data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted")
+                                                ? () {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (context) => ChatScreen(
+                                                          complaintId: widget.complaintId,
+                                                          trackingId: _data!['complaint']['tracking_id'],
+                                                          userType: "user",
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                : null,
+                                            icon: Icon(
+                                              Icons.chat_bubble, 
+                                              color: (_data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted") 
+                                                  ? Colors.white 
+                                                  : Colors.grey[500]
+                                            ),
+                                            label: Text(
+                                              'Chat with Officer',
+                                              style: TextStyle(
+                                                color: (_data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted") 
+                                                    ? Colors.white 
+                                                    : Colors.grey[500],
+                                                fontWeight: FontWeight.bold
+                                              ),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.transparent,
+                                              shadowColor: Colors.transparent,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(16),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
+                                      if (_data!['complaint']['assigned_officer_id'] == null || _data!['complaint']['status'] == "submitted")
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 20),
+                                          child: Text(
+                                            _data!['complaint']['status'] == "submitted"
+                                                ? "Chat will be available once under review"
+                                                : "Chat will be available once officer is assigned",
+                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
 
                                   // Audio Evidence
                                   if (_data!['complaint']['audio_path'] != null) ...[
@@ -643,7 +783,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                     ),
         ),
       ),
-      floatingActionButton: (_data != null && _data!['assigned_officer'] != null)
+      floatingActionButton: (_data != null && _data!['complaint']['assigned_officer_id'] != null && _data!['complaint']['status'] != "submitted")
           ? FloatingActionButton(
               onPressed: () {
                 Navigator.push(
@@ -652,6 +792,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                     builder: (_) => ChatScreen(
                       complaintId: widget.complaintId,
                       trackingId: _data!['complaint']['tracking_id'],
+                      userType: "user",
                     ),
                   ),
                 );
@@ -842,5 +983,29 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildTimelineStep(String title, bool isCompleted) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(
+            isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: isCompleted ? Colors.green : Colors.grey,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              color: isCompleted ? Colors.black87 : Colors.grey,
+              fontWeight: isCompleted ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

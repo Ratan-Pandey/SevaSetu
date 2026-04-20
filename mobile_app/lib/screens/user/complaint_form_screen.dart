@@ -176,14 +176,15 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
       return;
     }
 
-    final result = await apiService.submitComplaint(
-      userId,
-      _complaintController.text.trim(),
-      widget.department,
-      latitude: _locationData?['latitude'],
-      longitude: _locationData?['longitude'],
-      locationAddress: _locationData?['address'],
-    );
+    final result = await apiService.submitComplaint({
+      'text': _complaintController.text.trim(),
+      'selected_department': widget.department,
+      if (_locationData != null) ...{
+        'latitude': _locationData?['latitude'],
+        'longitude': _locationData?['longitude'],
+        'location_address': _locationData?['address'],
+      },
+    });
 
     if (!mounted) return;
 

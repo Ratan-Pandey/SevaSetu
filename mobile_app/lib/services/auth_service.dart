@@ -157,4 +157,13 @@ class AuthService extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  /// Get fresh Firebase ID token
+  Future<String?> getFirebaseToken() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      return await user.getIdToken();
+    }
+    return null;
+  }
 }

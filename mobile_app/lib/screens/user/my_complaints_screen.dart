@@ -161,154 +161,142 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
   }
 
   Widget _buildComplaintCard(Map<String, dynamic> complaint) {
-    final status = complaint['status'] ?? 'submitted';
-    final urgency = complaint['ai_urgency'] ?? 'Low';
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ComplaintDetailScreen(
+              complaintId: complaint['id'],
+              initialData: complaint,
+            ),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ComplaintDetailScreen(
-                  complaintId: complaint['id'],
+        );
+      },
+      child: Card(
+        elevation: 4,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 🔹 Tracking ID
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    complaint['tracking_id'] ?? 'N/A',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF667eea),
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    _getTimeAgo(complaint['created_at']),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // 🔹 Complaint text
+              Text(
+                complaint['text'] ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: Colors.black87,
                 ),
               ),
-            );
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tracking ID
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        complaint['tracking_id'] ?? 'N/A',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: Colors.grey[400],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
 
-                // Complaint Text
-                Text(
-                  complaint['text'] ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-                // Status and Urgency
-                Row(
-                  children: [
-                    _buildStatusChip(status),
-                    const SizedBox(width: 8),
-                    _buildUrgencyBadge(urgency),
-                    const Spacer(),
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: Colors.grey[500],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _getTimeAgo(complaint['created_at']),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              // 🔹 Status + Priority Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // STATUS
+                  _buildStatusChip(complaint['status'] ?? 'submitted'),
+
+                  // PRIORITY
+                  _buildPriorityChip(complaint['priority_label'] ?? 'Low'),
+                ],
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPriorityChip(String priority) {
+    Color color;
+
+    switch (priority) {
+      case "High":
+        color = Colors.red;
+        break;
+      case "Medium":
+        color = Colors.orange;
+        break;
+      case "Low":
+        color = Colors.green;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
+    return Chip(
+      label: Text(priority ?? "N/A"),
+      backgroundColor: color.withOpacity(0.2),
+      labelStyle: TextStyle(
+        color: color,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+      ),
+      side: BorderSide.none,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
     );
   }
 
   Widget _buildStatusChip(String status) {
-    final color = _getStatusColor(status);
-    final displayText = status.replaceAll('_', ' ').toUpperCase();
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        displayText,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
-      ),
-    );
-  }
+    Color color;
 
-  Widget _buildUrgencyBadge(String urgency) {
-    final color = _getUrgencyColor(urgency);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.flag, size: 14, color: color),
-        const SizedBox(width: 4),
-        Text(
-          urgency,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-      ],
+    switch (status) {
+      case "resolved":
+        color = Colors.green;
+        break;
+      case "in_progress":
+        color = Colors.orange;
+        break;
+      case "under_review":
+        color = Colors.blue;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
+    return Chip(
+      label: Text(status.replaceAll('_', ' ').toUpperCase()),
+      backgroundColor: color.withOpacity(0.2),
+      labelStyle: TextStyle(
+        color: color,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+      ),
+      side: BorderSide.none,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -351,36 +339,6 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
         ],
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'submitted':
-        return const Color(0xFF42A5F5);
-      case 'under_review':
-        return const Color(0xFFFFA726);
-      case 'in_progress':
-        return const Color(0xFF764ba2);
-      case 'resolved':
-        return const Color(0xFF66BB6A);
-      case 'closed':
-        return Colors.grey;
-      default:
-        return const Color(0xFF42A5F5);
-    }
-  }
-
-  Color _getUrgencyColor(String urgency) {
-    switch (urgency.toLowerCase()) {
-      case 'high':
-        return const Color(0xFFEF5350);
-      case 'medium':
-        return const Color(0xFFFFA726);
-      case 'low':
-        return const Color(0xFF66BB6A);
-      default:
-        return Colors.grey;
-    }
   }
 
   String _getTimeAgo(dynamic timestamp) {

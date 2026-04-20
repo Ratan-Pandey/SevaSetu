@@ -4,25 +4,80 @@ Authentication: Firebase (Google Sign-in) for users, Email/Password for officers
 Language: English only
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, WebSocket, WebSocketDisconnect, File, UploadFile
+import shutil
+import os
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 import models
-from database import engine, get_db
-from models import Base
 import schemas
 import crud
-from firebase_config import initialize_firebase, verify_token
+import re
+from database import engine, get_db
+import firebase_admin
+from firebase_admin import credentials, messaging
+from firebase_config import verify_firebase_token, initialize_firebase
 from ai.analyze_complaint import analyze_complaint
-from fastapi import File, UploadFile
+from security import verify_password, create_access_token, decode_token, get_password_hash
+from models import Base, User, Complaint, ChatMessage, Notification, Officer, ComplaintUpdate, ComplaintRating
+
+
+def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)):
+    """Dependency to verify Firebase token and return DB user"""
+    try:
+        token = authorization.split(" ")[1]
+        firebase_user = verify_firebase_token(token)
+
+        if not firebase_user:
+            raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+        # Sync with database to get the internal Integer ID
+        user = crud.get_user_by_firebase_uid(db, firebase_user['uid'])
+        
+        if not user:
+            # Auto-register if valid token but not in DB
+            user = crud.create_user(
+                db=db,
+                firebase_uid=firebase_user['uid'],
+                email=firebase_user.get('email', 'unknown@gmail.com'),
+                name=firebase_user.get('name', 'Citizen')
+            )
+        
+        return user
+
+    except Exception:
+        raise HTTPException(
+            status_code=401, 
+            detail="Authorization header missing or invalid"
+        )
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/officer/login")
+
+
+from jose import ExpiredSignatureError, JWTError
+
+def get_current_officer(token: str = Depends(oauth2_scheme)):
+    """Dependency to verify JWT and return officer details"""
+    try:
+        payload = decode_token(token)
+        return payload
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired. Please login again.")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
+
+
+from ai.analyze_complaint import analyze_complaint
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import shutil
 import time
-from models import Complaint, User, ChatMessage, ComplaintRating, Officer, ComplaintUpdate, Notification
-import firebase_admin
-from firebase_admin import credentials, messaging
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -51,19 +106,35 @@ app = FastAPI(
     version="3.0.0"
 )
 
+# ✅ ENABLE CORS (Unified & Robust)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+# ✅ REQUEST LOGGER (For debugging)
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"🚀 [REQUEST] {request.method} {request.url}")
+    try:
+        response = await call_next(request)
+        print(f"✅ [RESPONSE] {response.status_code}")
+        return response
+    except Exception as e:
+        print(f"❌ [ERROR] {e}")
+        raise
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Create Socket.IO ASGI app
 socket_app = socketio.ASGIApp(sio, app)
 
-# Initialize Firebase Admin
-try:
-    cred = credentials.Certificate("firebase-service-account.json")
-    firebase_admin.initialize_app(cred)
-    print("✅ Firebase Admin initialized")
-except Exception as e:
-    print(f"⚠️ Firebase Admin init failed: {e}")
+# Firebase is initialized via initialize_firebase() at the top of the file
 
 # Email settings (use Gmail for testing)
 EMAIL_HOST = "smtp.gmail.com"
@@ -92,15 +163,45 @@ async def send_email(to_email: str, subject: str, body: str):
     except Exception as e:
         print(f"❌ Email error: {e}")
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # ✅ Allow all
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+
+
+STOPWORDS = {"the", "is", "for", "my", "in", "on", "a", "an", "and", "to", "of", "please", "help"}
+
+
+def preprocess(text: str) -> set:
+    """Normalize text and remove stopwords"""
+    # Remove punctuation and normalize
+    clean_text = re.sub(r'[^\w\s\d]', '', text.lower())
+    return {
+        word for word in clean_text.split()
+        if word not in STOPWORDS
+    }
+
+
+def quick_signature(text: str) -> frozenset:
+    """Generate a light hash of the top keywords for fast pre-filtering"""
+    words = sorted(list(preprocess(text)))
+    return frozenset(words[:5])  # Take first 5 sorted keywords as signature
+
+
+def is_similar(text1: str, text2: str) -> bool:
+    """Check semantic similarity between two texts using Jaccard Similarity (excluding stopwords)"""
+    # 1️⃣ Check for numerical differences (2 days != 5 days)
+    nums1 = set(re.findall(r'\d+', text1))
+    nums2 = set(re.findall(r'\d+', text2))
+    
+    if nums1 != nums2:
+        return False
+
+    # 2️⃣ Jaccard Similarity on keywords
+    words1 = preprocess(text1)
+    words2 = preprocess(text2)
+    
+    if not words1 or not words2:
+        return False
+        
+    similarity = len(words1 & words2) / len(words1 | words2)
+    return similarity > 0.6  # 60% keyword overlap threshold
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -128,7 +229,7 @@ def firebase_login(request: schemas.FirebaseAuthRequest, db: Session = Depends(g
     Mobile app sends Firebase ID token
     """
     # Verify Firebase token
-    firebase_user = verify_token(request.id_token)
+    firebase_user = verify_firebase_token(request.id_token)
     
     if not firebase_user:
         raise HTTPException(
@@ -157,26 +258,45 @@ def firebase_login(request: schemas.FirebaseAuthRequest, db: Session = Depends(g
     )
 
 
-@app.post("/auth/officer/login", response_model=schemas.AuthResponse)
-def officer_login(request: schemas.OfficerLoginRequest, db: Session = Depends(get_db)):
+@app.post("/auth/officer/login")
+def officer_login(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: Session = Depends(get_db)
+):
     """
-    Officer login with email/password
+    Officer/Admin login with Form Data compatibility (Swagger UI support)
     """
-    officer = crud.get_officer_by_email(db, request.email)
-    
-    if not officer or not crud.verify_officer_password(request.password, officer.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
-        )
-    
-    return schemas.AuthResponse(
-        user_id=officer.id,
-        email=officer.email,
-        name=officer.name,
-        role='officer',
-        department=officer.department
-    )
+    email = form_data.username
+    password = form_data.password
+
+    officer = db.query(models.Officer).filter(models.Officer.email == email).first()
+
+    if not officer:
+        raise HTTPException(status_code=401, detail="Invalid email")
+
+    # Verify password using security helper
+    if not verify_password(password, officer.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # Determine dynamic role
+    role = "admin" if officer.department == "Admin" else "officer"
+
+    # Generate Secure JWT
+    token = create_access_token({
+        "id": officer.id,
+        "role": role,
+        "department": officer.department
+    })
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": role,
+        "officer_id": officer.id,
+        "email": officer.email,
+        "name": officer.name,
+        "department": officer.department
+    }
 
 
 # ===== USER PROFILE ROUTES =====
@@ -209,33 +329,55 @@ def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session
 @app.post("/complaints/submit", response_model=schemas.ComplaintResponse)
 async def submit_complaint(
     complaint: schemas.ComplaintSubmit,
-    user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Submit new complaint with AI analysis"""
+    user_id = current_user.id
     
-    # ✅ CHECK FOR DUPLICATE UNRESOLVED COMPLAINTS
-    similar_text = complaint.text.strip().lower()
+    # ✅ CHECK FOR DUPLICATE UNRESOLVED COMPLAINTS (Last 7 days)
     department = complaint.selected_department
+    recent_time = datetime.utcnow() - timedelta(days=7)
     
-    # Check for existing unresolved complaint with similar text
+    # 🚨 RULE: Only one active complaint per department
+    existing_active = db.query(Complaint).filter(
+        Complaint.user_id == user_id,
+        Complaint.selected_department == department,
+        Complaint.status.in_(["submitted", "under_review", "in_progress"])
+    ).first()
+
+    if existing_active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"You already have an active complaint in {department} "
+                   f"(Tracking ID: {existing_active.tracking_id}). "
+                   f"Please wait until it is resolved."
+        )
+    
+    # Check for existing unresolved complaint in same department
     existing = db.query(Complaint).filter(
         Complaint.user_id == user_id,
         Complaint.selected_department == department,
-        Complaint.status.in_(['submitted', 'under_review', 'in_progress'])
+        Complaint.status.in_(['submitted', 'under_review', 'in_progress']),
+        Complaint.created_at >= recent_time
     ).all()
+
+    new_sig = quick_signature(complaint.text)
     
-    for existing_complaint in existing:
-        if existing_complaint.text.strip().lower() == similar_text:
+    for c in existing:
+        # Pre-filter: if top keywords are totally different, skip expensive similarity check
+        if quick_signature(c.text) != new_sig:
+            continue
+
+        if is_similar(c.text, complaint.text):
             raise HTTPException(
                 status_code=409,
-                detail=f"You already have an unresolved complaint in {department} department "
-                       f"(Tracking ID: {existing_complaint.tracking_id}). Please wait for resolution "
-                       f"or check 'My Complaints'."
+                detail=f"Similar complaint already exists in {department} (Tracking ID: {c.tracking_id}). "
+                       f"Please wait for resolution or check 'My Complaints'."
             )
     
     # Run AI analysis
-    ai_result = analyze_complaint(complaint.text)
+    ai_result = analyze_complaint(complaint.text, complaint.selected_department)
     
     # Create complaint in database
     new_complaint = crud.create_complaint(
@@ -342,7 +484,10 @@ async def get_user_complaints(user_id: int, db: Session = Depends(get_db)):
             "longitude": complaint.longitude,
             "location_address": complaint.location_address,  # ✅ FIXED
             "delay_risk_label": complaint.delay_risk_label,
+            "priority_label": complaint.priority_label,
+            "priority_score": complaint.priority_score,
             "created_at": complaint.created_at.isoformat(),
+            "assigned_officer_id": complaint.assigned_officer_id,
             "officer": officer,
             "latest_update": {
                 "update_text": latest_update.update_text if latest_update else None,
@@ -357,10 +502,15 @@ async def get_user_complaints(user_id: int, db: Session = Depends(get_db)):
 async def upload_complaint_image(
     complaint_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
-    """Upload image for a complaint"""
+    """Authenticated image upload for valid complaints"""
     try:
+        # Check for directory existence
+        UPLOAD_DIR = "static/complaint_images"
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+
         complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
         if not complaint:
             raise HTTPException(status_code=404, detail="Complaint not found")
@@ -381,9 +531,10 @@ async def upload_complaint_image(
         return {
             "message": "Image uploaded successfully",
             "image_path": file_path,
-            "image_url": f"/{file_path}"
+            "url": f"/{file_path}"
         }
     except Exception as e:
+        print(f"❌ Image Upload Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -392,6 +543,140 @@ def get_my_complaints(user_id: int, db: Session = Depends(get_db)):
     """Get all complaints for a user"""
     complaints = crud.get_user_complaints(db, user_id)
     return complaints
+
+
+@app.get("/user/stats/{user_id}")
+def get_user_stats(user_id: int, db: Session = Depends(get_db)):
+    """Get complaint statistics for a specific user"""
+    return crud.get_user_stats(db, user_id)
+
+
+@app.get("/user/notifications/{user_id}")
+def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
+    notifications = db.query(Notification).filter(
+        Notification.user_id == user_id
+    ).order_by(Notification.created_at.desc()).all()
+
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "is_read": n.is_read,
+            "created_at": n.created_at.isoformat(),
+            "complaint_id": n.complaint_id,
+            "notification_type": n.notification_type
+        }
+        for n in notifications
+    ]
+
+
+@app.put("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.id == notification_id).first()
+
+    if notification:
+        notification.is_read = True
+        db.commit()
+        return {"message": "Marked as read"}
+
+    raise HTTPException(status_code=404, detail="Notification not found")
+ 
+ 
+@app.get("/officer/stats")
+def get_officer_stats(user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Get personal performance stats (Officers Only)"""
+    if user["role"] not in ["officer", "admin"]:
+        raise HTTPException(status_code=403, detail="Operational access required")
+        
+    return crud.get_complaint_stats(db, user["department"])
+
+
+@app.get("/admin/stats")
+def get_admin_stats(user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Get global system statistics (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+    return crud.get_admin_stats(db)
+
+
+@app.get("/admin/department-stats")
+def get_department_stats(user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Get complaint metrics broken down by department (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+    return crud.get_department_stats(db)
+
+
+@app.get("/admin/top-problems")
+def get_top_problems(user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Identify bottleneck departments (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+    return crud.get_top_problem_departments(db)
+
+
+@app.get("/admin/officers")
+def get_all_officers(user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Get all registered government officers (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+    return crud.get_all_officers(db)
+
+
+@app.delete("/admin/delete-officer/{officer_id}")
+def delete_officer(officer_id: int, user=Depends(get_current_officer), db: Session = Depends(get_db)):
+    """Admin removes an officer account (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+        
+    officer = db.query(models.Officer).filter(models.Officer.id == officer_id).first()
+
+    if not officer:
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    db.delete(officer)
+    db.commit()
+
+    return {"message": "Officer deleted successfully"}
+
+
+@app.post("/admin/create-officer")
+def create_officer(
+    request: schemas.OfficerCreate, 
+    user=Depends(get_current_officer), 
+    db: Session = Depends(get_db)
+):
+    """Admin creates a new officer account (Admins Only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrative access required")
+
+    # Check if email exists
+    existing = db.query(models.Officer).filter(models.Officer.email == request.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash the password
+    hashed_password = get_password_hash(request.password)
+
+    new_officer = models.Officer(
+        name=request.name,
+        email=request.email,
+        employee_id=request.employee_id,
+        department=request.department,
+        password_hash=hashed_password
+    )
+
+    db.add(new_officer)
+    db.commit()
+    db.refresh(new_officer)
+
+    return {
+        "id": new_officer.id,
+        "name": new_officer.name,
+        "department": new_officer.department,
+        "message": "Officer account created successfully"
+    }
 
 
 @app.get("/complaints/{complaint_id}")
@@ -483,6 +768,9 @@ def get_officer_complaints(
     officer_id: int,
     assigned_only: bool = False,
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    priority: Optional[str] = None,
+    sort_by: str = "priority",
     db: Session = Depends(get_db)
 ):
     """Get complaints for officer"""
@@ -496,38 +784,16 @@ def get_officer_complaints(
         db=db,
         department=officer.department,
         officer_id=officer_id if assigned_only else None,
-        status=status
+        status=status,
+        search=search,
+        priority=priority,
+        sort_by=sort_by
     )
     
     return complaints
 
 
-@app.post("/officer/complaints/{complaint_id}/assign/{officer_id}")
-async def assign_to_me(complaint_id: int, officer_id: int, db: Session = Depends(get_db)):
-    """Assign complaint to officer"""
-    complaint = crud.assign_complaint_to_officer(db, complaint_id, officer_id)
-    
-    # Send email notification to the user about assignment
-    if complaint and complaint.user_id:
-        user = db.query(models.User).filter(models.User.id == complaint.user_id).first()
-        officer = db.query(models.Officer).filter(models.Officer.id == officer_id).first()
-        if user and user.email and officer:
-            await send_email(
-                user.email,
-                f"Complaint {complaint.tracking_id} Assigned",
-                f"""
-                <h2>Dear {user.name},</h2>
-                <p>Your complaint has been assigned to an officer.</p>
-                <p><strong>Tracking ID:</strong> {complaint.tracking_id}</p>
-                <p><strong>Assigned Officer:</strong> {officer.name}</p>
-                <p><strong>Department:</strong> {officer.department}</p>
-                <p>You will receive updates on the progress.</p>
-                <br>
-                <p>Thank you for your patience.</p>
-                """
-            )
-    
-    return {"message": "Complaint assigned successfully", "complaint": complaint}
+
 
 
 @app.put("/officer/complaints/{id}/update")
@@ -775,6 +1041,26 @@ def get_all_complaints(skip: int = 0, limit: int = 100, db: Session = Depends(ge
     return crud.get_all_complaints(db, skip, limit)
 
 
+# Multimedia
+UPLOAD_DIR = "static/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/upload/image")
+async def upload_image(file: UploadFile = File(...)):
+    """General image upload for complaints or chat"""
+    file_extension = file.filename.split('.')[-1]
+    file_name = f"img_{int(time.time())}.{file_extension}"
+    file_path = f"{UPLOAD_DIR}/{file_name}"
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {
+        "file_path": file_path,
+        "url": f"http://127.0.0.1:8000/{file_path}"
+    }
+
+
 # Audio
 @app.post("/complaints/{complaint_id}/upload-audio")
 async def upload_complaint_audio(
@@ -819,31 +1105,82 @@ async def get_complaint_audio(complaint_id: int, db: Session = Depends(get_db)):
     }    
 
 
+# ===== CHAT & REAL-TIME WEBSOCKETS =====
+
+# Store active connections: {complaint_id: [websocket1, websocket2]}
+connections = {}
+
+@app.websocket("/ws/chat/{complaint_id}")
+async def websocket_chat(websocket: WebSocket, complaint_id: int):
+    """
+    Real-time room-based chat for specific complaints
+    """
+    await websocket.accept()
+    
+    # Initialize room if it doesn't exist
+    if complaint_id not in connections:
+        connections[complaint_id] = []
+    
+    connections[complaint_id].append(websocket)
+    
+    try:
+        while True:
+            # Receive message from one user
+            data = await websocket.receive_text()
+            
+            # Broadcast message to everyone in the same complaint room
+            # Note: In production, you'd use a message broker like Redis
+            for connection in connections[complaint_id]:
+                await connection.send_text(data)
+                
+    except WebSocketDisconnect:
+        # Clean up on disconnect
+        connections[complaint_id].remove(websocket)
+        if not connections[complaint_id]:
+            del connections[complaint_id]
+
+
 # ===== CHAT ENDPOINTS =====
 
 @app.post("/chat/{complaint_id}/send")
 async def send_chat_message(
     complaint_id: int,
-    message_data: dict,
+    message_data: schemas.ChatMessageCreate,
     db: Session = Depends(get_db)
 ):
     """Save chat message to database"""
     try:
         new_message = ChatMessage(
             complaint_id=complaint_id,
-            sender_id=message_data['sender_id'],
-            sender_type=message_data['sender_type'],
-            message=message_data['message']
+            sender_id=message_data.sender_id,
+            sender_type=message_data.sender_type,
+            message=message_data.message
         )
         db.add(new_message)
         db.commit()
         db.refresh(new_message)
+        
+        # 🚀 Create notification for user when officer sends message
+        if message_data.sender_type == "officer":
+            complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+
+            if complaint:
+                notification = Notification(
+                    user_id=complaint.user_id,
+                    complaint_id=complaint.id,
+                    title="New Message from Officer",
+                    message=f"You have a new message regarding complaint {complaint.tracking_id}.",
+                    notification_type="chat"
+                )
+                db.add(notification)
+                db.commit()
         
         return {
             "id": new_message.id,
             "complaint_id": new_message.complaint_id,
             "sender_id": new_message.sender_id,
             "sender_type": new_message.sender_type,
+            "sender_name": "Officer" if new_message.sender_type == "officer" else "User",
             "message": new_message.message,
             "created_at": new_message.created_at.isoformat(),
             "is_read": new_message.is_read
@@ -978,8 +1315,24 @@ async def get_ratings_summary(db: Session = Depends(get_db)):
 
 
 @app.get("/chat/{complaint_id}/messages")
-async def get_chat_messages(complaint_id: int, db: Session = Depends(get_db)):
-    """Get all messages for a complaint"""
+async def get_chat_messages(complaint_id: int, user_type: str, db: Session = Depends(get_db)):
+    """Get all messages for a complaint and mark them as read for the receiver"""
+    # Verify complaint exists
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+        
+    # Auto-mark messages from the opposite party as read
+    opposite_type = 'officer' if user_type == 'user' else 'user'
+    
+    db.query(ChatMessage).filter(
+        ChatMessage.complaint_id == complaint_id,
+        ChatMessage.sender_type == opposite_type,
+        ChatMessage.is_read == False
+    ).update({"is_read": True})
+    
+    db.commit()
+
     messages = db.query(ChatMessage).filter(
         ChatMessage.complaint_id == complaint_id
     ).order_by(ChatMessage.created_at.asc()).all()
@@ -988,6 +1341,7 @@ async def get_chat_messages(complaint_id: int, db: Session = Depends(get_db)):
         "id": msg.id,
         "sender_id": msg.sender_id,
         "sender_type": msg.sender_type,
+        "sender_name": "Officer" if msg.sender_type == "officer" else "User",
         "message": msg.message,
         "created_at": msg.created_at.isoformat(),
         "is_read": msg.is_read

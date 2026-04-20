@@ -1,5 +1,0 @@
-﻿======================================================================
-TESTING URGENCY RULES (Enhanced with Time Mentions)
-======================================================================
-
-[PASS] Text: Bijli nahi aa rahi teen din se

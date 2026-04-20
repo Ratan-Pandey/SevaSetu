@@ -2,7 +2,7 @@
 CRUD operations for database
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from models import User, Officer, Complaint, ComplaintUpdate, Notification, AIPrediction, generate_tracking_id
 from passlib.context import CryptContext
 from typing import Optional
@@ -58,6 +58,23 @@ def get_officer_by_email(db: Session, email: str) -> Optional[Officer]:
     return db.query(Officer).filter(Officer.email == email).first()
 
 
+def get_all_officers(db: Session):
+    """Retrieve all officers for management dashboard"""
+    officers = db.query(Officer).all()
+
+    return [
+        {
+            "id": o.id,
+            "name": o.name,
+            "email": o.email,
+            "employee_id": o.employee_id,
+            "department": o.department,
+            "is_active": o.is_active
+        }
+        for o in officers
+    ]
+
+
 def verify_officer_password(plain_password: str, hashed_password: str) -> bool:
     """Verify officer password"""
     return pwd_context.verify(plain_password, hashed_password)
@@ -88,6 +105,17 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
     """Create new complaint with AI predictions"""
     tracking_id = generate_tracking_id()
     
+    # 🔥 AUTO ASSIGNMENT LOGIC (Least Busy Officer)
+    officer = (
+        db.query(Officer)
+        .filter(Officer.department == selected_department)
+        .outerjoin(Complaint, Officer.id == Complaint.assigned_officer_id)
+        .group_by(Officer.id)
+        .order_by(func.count(Complaint.id).asc())
+        .first()
+    )
+    assigned_officer_id = officer.id if officer else None
+
     complaint = Complaint(
         tracking_id=tracking_id,
         user_id=user_id,
@@ -98,8 +126,12 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
         ai_urgency=ai_result.get('urgency'),
         delay_risk_label=ai_result.get('delay_risk_label'),
         delay_risk_score=ai_result.get('delay_risk_score'),
+        priority_score=ai_result.get('priority_score'),
+        priority_label=ai_result.get('priority_label'),
+        priority_explanation=ai_result.get('explanation'),
         final_department=ai_result.get('department'),
-        status='submitted',
+        status='under_review' if officer else 'submitted',
+        assigned_officer_id=assigned_officer_id,
         latitude=latitude,
         longitude=longitude,
         location_address=location_address
@@ -114,9 +146,21 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
         department=ai_result.get('department'),
         urgency=ai_result.get('urgency'),
         delay_risk_label=ai_result.get('delay_risk_label'),
-        delay_risk_score=ai_result.get('delay_risk_score')
+        delay_risk_score=ai_result.get('delay_risk_score'),
+        priority_score=ai_result.get('priority_score'),
+        priority_label=ai_result.get('priority_label')
     )
     db.add(ai_prediction)
+    
+    # 🚀 Create success notification
+    notification = Notification(
+        user_id=user_id,
+        complaint_id=complaint.id,
+        title="Complaint Submitted Successfully",
+        message=f"Your complaint {complaint.tracking_id} has been submitted and is under review.",
+        notification_type="status_update"
+    )
+    db.add(notification)
     
     db.commit()
     db.refresh(complaint)
@@ -129,33 +173,198 @@ def get_user_complaints(db: Session, user_id: int, limit: int = 20):
              .order_by(Complaint.created_at.desc()).limit(limit).all()
 
 
+def get_user_stats(db: Session, user_id: int):
+    """Get complaint statistics for a specific user"""
+    total = db.query(Complaint).filter(Complaint.user_id == user_id).count()
+
+    active = db.query(Complaint).filter(
+        Complaint.user_id == user_id,
+        Complaint.status.in_(["under_review", "in_progress"])
+    ).count()
+
+    resolved = db.query(Complaint).filter(
+        Complaint.user_id == user_id,
+        Complaint.status == "resolved"
+    ).count()
+
+    return {
+        "total": total,
+        "active": active,
+        "resolved": resolved
+    }
+
+
+def get_admin_stats(db: Session):
+    """Get overall system statistics for admin dashboard"""
+    total = db.query(Complaint).count()
+
+    resolved = db.query(Complaint).filter(
+        Complaint.status == "resolved"
+    ).count()
+
+    pending = db.query(Complaint).filter(
+        Complaint.status.in_(["submitted", "under_review", "in_progress"])
+    ).count()
+
+    high_priority = db.query(Complaint).filter(
+        Complaint.priority_label == "High"
+    ).count()
+
+    return {
+        "total": total,
+        "resolved": resolved,
+        "pending": pending,
+        "high_priority": high_priority
+    }
+
+
+def get_department_stats(db: Session):
+    """Get metrics broken down by department"""
+    departments = db.query(Complaint.selected_department).distinct().all()
+
+    result = []
+
+    for dept_tuple in departments:
+        dept = dept_tuple[0]
+
+        total = db.query(Complaint).filter(
+            Complaint.selected_department == dept
+        ).count()
+
+        resolved = db.query(Complaint).filter(
+            Complaint.selected_department == dept,
+            Complaint.status == "resolved"
+        ).count()
+
+        pending = db.query(Complaint).filter(
+            Complaint.selected_department == dept,
+            Complaint.status != "resolved"
+        ).count()
+
+        result.append({
+            "department": dept,
+            "total": total,
+            "resolved": resolved,
+            "pending": pending
+        })
+
+    return result
+
+
+def get_top_problem_departments(db: Session):
+    """Identify departments struggling with high pending ratios"""
+    departments = db.query(Complaint.selected_department).distinct().all()
+
+    result = []
+
+    for dept_tuple in departments:
+        dept = dept_tuple[0]
+
+        total = db.query(Complaint).filter(
+            Complaint.selected_department == dept
+        ).count()
+
+        resolved = db.query(Complaint).filter(
+            Complaint.selected_department == dept,
+            Complaint.status == "resolved"
+        ).count()
+
+        pending = total - resolved
+
+        # Avoid division by zero
+        pending_ratio = (pending / total) if total > 0 else 0
+
+        result.append({
+            "department": dept,
+            "pending": pending,
+            "total": total,
+            "pending_ratio": round(pending_ratio, 2)
+        })
+
+    # Sort by worst performing (highest pending ratio)
+    result.sort(key=lambda x: x["pending_ratio"], reverse=True)
+
+    return result[:5]  # top 5 problem departments
+
+
 def get_complaint_by_id(db: Session, complaint_id: int) -> Optional[Complaint]:
     """Get complaint by ID"""
     return db.query(Complaint).filter(Complaint.id == complaint_id).first()
 
 
 def get_complaints_for_officer(db: Session, department: str, officer_id: Optional[int] = None,
-                              status: Optional[str] = None, limit: int = 50):
+                               status: Optional[str] = None, search: Optional[str] = None, 
+                               priority: Optional[str] = None,
+                               sort_by: str = "priority", limit: int = 50):
     """Get complaints for officer dashboard"""
-    query = db.query(Complaint).filter(Complaint.final_department == department)
+    query = db.query(Complaint).filter(Complaint.selected_department == department)
     
     if officer_id:
         query = query.filter(Complaint.assigned_officer_id == officer_id)
     
     if status:
         query = query.filter(Complaint.status == status)
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        query = query.filter(
+            (Complaint.text.ilike(search_term)) |
+            (Complaint.tracking_id.ilike(search_term))
+        )
+
+    if priority:
+        query = query.filter(Complaint.priority_label == priority)
     
-    return query.order_by(Complaint.created_at.desc()).limit(limit).all()
+    if sort_by == "priority":
+        query = query.order_by(Complaint.priority_score.desc())
+    elif sort_by == "latest":
+        query = query.order_by(Complaint.created_at.desc())
+    elif sort_by == "oldest":
+        query = query.order_by(Complaint.created_at.asc())
+    elif sort_by == "status":
+        query = query.order_by(Complaint.status.asc())
+    else:
+        query = query.order_by(Complaint.priority_score.desc())
+    
+    return query.limit(limit).all()
 
 
-def assign_complaint_to_officer(db: Session, complaint_id: int, officer_id: int) -> Complaint:
-    """Assign complaint to officer"""
-    complaint = get_complaint_by_id(db, complaint_id)
-    complaint.assigned_officer_id = officer_id
-    complaint.status = 'under_review'
-    db.commit()
-    db.refresh(complaint)
-    return complaint
+def get_complaint_stats(db: Session, department: str):
+    total = db.query(Complaint).filter(
+        Complaint.selected_department == department
+    ).count()
+
+    high = db.query(Complaint).filter(
+        Complaint.selected_department == department,
+        Complaint.priority_label == "High"
+    ).count()
+
+    medium = db.query(Complaint).filter(
+        Complaint.selected_department == department,
+        Complaint.priority_label == "Medium"
+    ).count()
+
+    low = db.query(Complaint).filter(
+        Complaint.selected_department == department,
+        Complaint.priority_label == "Low"
+    ).count()
+
+    return {
+        "total": total,
+        "high": high,
+        "medium": medium,
+        "low": low
+    }
+
+
+# def assign_complaint_to_officer(db: Session, complaint_id: int, officer_id: int) -> Complaint:
+#     """Assign complaint to officer"""
+#     complaint = get_complaint_by_id(db, complaint_id)
+#     complaint.assigned_officer_id = officer_id
+#     complaint.status = 'under_review'
+#     db.commit()
+#     # db.refresh(complaint)
+#     return complaint
 
 
 def update_complaint_status(db: Session, complaint_id: int, officer_id: int,

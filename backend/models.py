@@ -87,6 +87,7 @@ class Officer(Base):
     assigned_complaints = relationship("Complaint", back_populates="assigned_officer")
     updates = relationship("ComplaintUpdate", back_populates="officer")
     ratings_received = relationship("ComplaintRating", back_populates="officer")
+    notifications = relationship("Notification", back_populates="officer", cascade="all, delete-orphan")
 
 
 class Complaint(Base):
@@ -126,6 +127,9 @@ class Complaint(Base):
     ai_urgency = Column(String(20))
     delay_risk_label = Column(String(20))
     delay_risk_score = Column(Float)
+    priority_score = Column(Float, nullable=True)
+    priority_label = Column(String(20), nullable=True)
+    priority_explanation = Column(String(500), nullable=True)
     
     # Final values (after officer review)
     final_department = Column(String(50))
@@ -204,28 +208,26 @@ class ComplaintUpdate(Base):
 
 class Notification(Base):
     """
-    User notifications for complaint status updates
+    Notifications for both Users and Officers
     """
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    complaint_id = Column(Integer, ForeignKey("complaints.id", ondelete="CASCADE"), nullable=True)
-    
-    # Notification content
-    title = Column(String(100), nullable=False)
-    message = Column(Text, nullable=False)
-    notification_type = Column(String(20), default='info')
-    # Types: status_update, comment, assignment, resolved
-    
-    # Status
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    officer_id = Column(Integer, ForeignKey("officers.id"), nullable=True)
+    complaint_id = Column(Integer, ForeignKey("complaints.id"), nullable=True)
+
+    title = Column(String)
+    message = Column(String)
+    notification_type = Column(String, default="info")
+
     is_read = Column(Boolean, default=False)
-    
-    # Timestamp
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     # Relationships
     user = relationship("User", back_populates="notifications")
+    officer = relationship("Officer", back_populates="notifications")
     complaint = relationship("Complaint", back_populates="notifications")
 
 
@@ -244,6 +246,8 @@ class AIPrediction(Base):
     urgency = Column(String(20))
     delay_risk_label = Column(String(20))
     delay_risk_score = Column(Float)
+    priority_score = Column(Float, nullable=True)
+    priority_label = Column(String(20), nullable=True)
     
     # Model version
     model_version = Column(String(20), default='v4.0')

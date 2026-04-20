@@ -20,17 +20,20 @@ class _UserDashboardState extends State<UserDashboard> {
   int _currentIndex = 0;
   Timer? _refreshTimer;
   
-  final List<Widget> _screens = [
-    const DashboardHome(),
-    const MyComplaintsScreen(),
-    const NotificationsScreen(),
-    const ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    final userId = authService.getUserId() ?? 0;
+
+    final List<Widget> screens = [
+      const DashboardHome(),
+      const MyComplaintsScreen(),
+      NotificationsScreen(userId: userId),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -88,6 +91,7 @@ class DashboardHome extends StatefulWidget {
 class _DashboardHomeState extends State<DashboardHome> {
   int _totalComplaints = 0;
   int _unreadNotifications = 0;
+  Map<String, dynamic> _stats = {'total': 0, 'active': 0, 'resolved': 0};
   bool _isLoading = true;
   Timer? _refreshTimer;
 
@@ -128,11 +132,15 @@ class _DashboardHomeState extends State<DashboardHome> {
     if (userId != null) {
       final complaints = await apiService.getMyComplaints(userId);
       final unreadCount = await apiService.getUnreadCount(userId);
+      final statsData = await apiService.getUserStats(userId);
       
       if (mounted) {
         setState(() {
           _totalComplaints = complaints?.length ?? 0;
           _unreadNotifications = unreadCount;
+          if (statsData != null) {
+            _stats = statsData;
+          }
           _isLoading = false;
         });
       }
@@ -221,28 +229,43 @@ class _DashboardHomeState extends State<DashboardHome> {
                       const SizedBox(height: 24),
 
                       // Stats Cards
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              'Total\nComplaints',
-                              _totalComplaints.toString(),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildStatCard(
+                              'Total',
+                              _stats['total'].toString(),
                               Icons.description,
                               Colors.white,
                               _isLoading,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatCard(
-                              'New\nNotifications',
+                            const SizedBox(width: 12),
+                            _buildStatCard(
+                              'Active',
+                              _stats['active'].toString(),
+                              Icons.pending_actions,
+                              Colors.white,
+                              _isLoading,
+                            ),
+                            const SizedBox(width: 12),
+                            _buildStatCard(
+                              'Resolved',
+                              _stats['resolved'].toString(),
+                              Icons.check_circle_outline,
+                              Colors.white,
+                              _isLoading,
+                            ),
+                            const SizedBox(width: 12),
+                            _buildStatCard(
+                              'Unread',
                               _unreadNotifications.toString(),
                               Icons.notifications,
                               Colors.white,
                               _isLoading,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -326,6 +349,12 @@ class _DashboardHomeState extends State<DashboardHome> {
                           ),
                           const SizedBox(height: 16),
 
+                          _buildDepartmentCard(
+                            'Police Department',
+                            'Crime, theft, kidnapping, emergencies',
+                            Icons.local_police,
+                            Colors.indigo,
+                          ),
                           _buildDepartmentCard(
                             'Power Department',
                             'Electricity issues, power cuts',

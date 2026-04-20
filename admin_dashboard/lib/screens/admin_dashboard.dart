@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/auth_service.dart';
@@ -57,17 +59,26 @@ class DashboardHome extends StatefulWidget {
 }
 
 class _DashboardHomeState extends State<DashboardHome> {
-  Map<String, dynamic>? _analytics;
-  bool _isLoading = true;
+  Map<String, dynamic> stats = {};
+  List departmentStats = [];
+  List topProblems = [];
+  List officers = [];
+  bool isLoading = true;
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadAnalytics();
+    loadStats();
+    loadDepartmentStats();
+    loadTopProblems();
+    loadOfficers();
     // Auto-refresh every 10 seconds
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _loadAnalytics();
+      loadStats();
+      loadDepartmentStats();
+      loadTopProblems();
+      loadOfficers();
     });
   }
 
@@ -77,14 +88,70 @@ class _DashboardHomeState extends State<DashboardHome> {
     super.dispose();
   }
 
-  Future<void> _loadAnalytics() async {
-    final apiService = Provider.of<ApiService>(context, listen: false);
-    final data = await apiService.getSystemAnalytics();
-    if (mounted) {
-      setState(() {
-        _analytics = data;
-        _isLoading = false;
-      });
+  Future<void> loadStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/admin/stats"),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          stats = json.decode(response.body);
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<void> loadDepartmentStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/admin/department-stats"),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          departmentStats = json.decode(response.body);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading department stats: $e");
+    }
+  }
+
+  Future<void> loadTopProblems() async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/admin/top-problems"),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          topProblems = json.decode(response.body);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading top problems: $e");
+    }
+  }
+
+  Future<void> loadOfficers() async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/admin/officers"),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          officers = json.decode(response.body);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading officers: $e");
     }
   }
 
@@ -100,13 +167,16 @@ class _DashboardHomeState extends State<DashboardHome> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              setState(() => _isLoading = true);
-              _loadAnalytics();
+              setState(() => isLoading = true);
+              loadStats();
+              loadDepartmentStats();
+              loadTopProblems();
+              loadOfficers();
             },
           ),
         ],
       ),
-      body: _isLoading
+      body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadAnalytics,
@@ -190,36 +260,11 @@ class _DashboardHomeState extends State<DashboardHome> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 1.4,
                       children: [
-                        _buildKPICard(
-                          'Total Complaints',
-                          _analytics?['total_complaints']?.toString() ?? '0',
-                          Icons.description,
-                          const Color(0xFF3b82f6),
-                          '+12% from last month',
-                        ),
-                        _buildKPICard(
-                          'Active Users',
-                          _analytics?['total_users']?.toString() ?? '0',
-                          Icons.people,
-                          const Color(0xFF8b5cf6),
-                          'Registered citizens',
-                        ),
-                        _buildKPICard(
-                          'Officers',
-                          _analytics?['total_officers']?.toString() ?? '0',
-                          Icons.badge,
-                          const Color(0xFFf59e0b),
-                          'System officers',
-                        ),
-                        _buildKPICard(
-                          'Resolved',
-                          _analytics?['resolved_complaints']?.toString() ?? '0',
-                          Icons.check_circle,
-                          const Color(0xFF10b981),
-                          '${_getResolutionRate()}% resolution rate',
-                        ),
+                        _buildCard("Total", stats["total"], Colors.blue),
+                        _buildCard("Resolved", stats["resolved"], Colors.green),
+                        _buildCard("Pending", stats["pending"], Colors.orange),
+                        _buildCard("High Priority", stats["high_priority"], Colors.red),
                       ],
                     ),
                     const SizedBox(height: 28),
@@ -252,6 +297,164 @@ class _DashboardHomeState extends State<DashboardHome> {
                     ),
                     const SizedBox(height: 28),
 
+                    // Top Problem Areas Section
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "⚠ Top Problem Areas",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        if (topProblems.isEmpty)
+                          const Text("No critical problem areas identified."),
+                        ...topProblems.map((dept) {
+                          Color color = dept['pending_ratio'] > 0.7
+                              ? Colors.red
+                              : dept['pending_ratio'] > 0.4
+                                  ? Colors.orange
+                                  : Colors.green;
+
+                          return Card(
+                            elevation: 0,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.warning, color: color, size: 20),
+                              ),
+                              title: Text(
+                                dept['department'],
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                "Pending: ${dept['pending']} / ${dept['total']}",
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    "${(dept['pending_ratio'] * 100).toStringAsFixed(0)}%",
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Pending Ratio",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Officers List Section
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "👨‍💼 Officers",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        if (officers.isEmpty)
+                          const Text("No officers registered yet."),
+                        ...officers.map((o) {
+                          return Card(
+                            elevation: 0,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.person, color: Colors.blue, size: 24),
+                              ),
+                              title: Text(
+                                o['name'],
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                "${o['department']} • ${o['employee_id']}",
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () async {
+                                  bool? confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text("Delete Officer"),
+                                      content: Text("Are you sure you want to delete ${o['name']}? This action cannot be undone."),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text("Cancel"),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                          child: const Text("Delete"),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirm == true) {
+                                    try {
+                                      final response = await http.delete(
+                                        Uri.parse("${ApiService.baseUrl}/admin/delete-officer/${o['id']}"),
+                                      );
+                                      if (response.statusCode == 200) {
+                                        loadOfficers();
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Officer deleted successfully')),
+                                          );
+                                        }
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Error deleting officer: $e')),
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+
                     // Status Overview
                     const Text(
                       'Status Overview',
@@ -266,7 +469,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                         Expanded(
                           child: _buildStatusCard(
                             'Pending',
-                            _analytics?['pending_complaints']?.toString() ?? '0',
+                            stats?['pending_complaints']?.toString() ?? '0',
                             Colors.orange,
                           ),
                         ),
@@ -274,7 +477,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                         Expanded(
                           child: _buildStatusCard(
                             'In Progress',
-                            _analytics?['in_progress_complaints']?.toString() ?? '0',
+                            stats?['in_progress_complaints']?.toString() ?? '0',
                             Colors.blue,
                           ),
                         ),
@@ -282,7 +485,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                         Expanded(
                           child: _buildStatusCard(
                             'Resolved',
-                            _analytics?['resolved_complaints']?.toString() ?? '0',
+                            stats?['resolved_complaints']?.toString() ?? '0',
                             Colors.green,
                           ),
                         ),
@@ -363,9 +566,7 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   Widget _buildDepartmentChart() {
-    final departmentData = _analytics?['by_department'] as Map<String, dynamic>? ?? {};
-    
-    if (departmentData.isEmpty) {
+    if (departmentStats.isEmpty) {
       return Center(
         child: Text(
           'No data available',
@@ -376,14 +577,14 @@ class _DashboardHomeState extends State<DashboardHome> {
 
     return PieChart(
       PieChartData(
-        sections: departmentData.entries.map((entry) {
-          final index = departmentData.keys.toList().indexOf(entry.key);
+        sections: departmentStats.map((dept) {
+          final index = departmentStats.indexOf(dept);
           return PieChartSectionData(
-            value: (entry.value as num).toDouble(),
-            title: '${entry.value}',
+            value: (dept['total'] as num).toDouble(),
+            title: '${dept['department']}\n${dept['total']}',
             radius: 100,
             titleStyle: const TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
@@ -440,10 +641,39 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   int _getResolutionRate() {
-    if (_analytics == null) return 0;
-    final total = _analytics!['total_complaints'] ?? 0;
-    final resolved = _analytics!['resolved_complaints'] ?? 0;
+    if (stats == null) return 0;
+    final total = stats!['total'] ?? 0;
+    final resolved = stats!['resolved'] ?? 0;
     if (total == 0) return 0;
     return ((resolved / total) * 100).round();
+  }
+
+  Widget _buildCard(String title, dynamic value, Color color) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value?.toString() ?? '0',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

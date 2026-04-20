@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'auth_service.dart';
 
 class ApiService {
-  // For Desktop/Chrome:
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000'; // ⚡ FIXED: Use static const and IP for reliability
 
   // For Android Emulator:
   // static const String baseUrl = 'http://10.0.2.2:8000';
@@ -82,31 +82,26 @@ class ApiService {
   // ============================================================================
 
   /// Submit complaint with Phase 4 location support
-  Future<Map<String, dynamic>?> submitComplaint(
-    int userId,
-    String text,
-    String selectedDepartment, {
-    double? latitude,
-    double? longitude,
-    String? locationAddress,
-  }) async {
+  Future<Map<String, dynamic>?> submitComplaint(Map<String, dynamic> data) async {
     try {
-      final body = {
-        'text': text,
-        'selected_department': selectedDepartment,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
-        if (locationAddress != null) 'location_address': locationAddress,
-      };
+      // 🔑 Get fresh Firebase token for secure submission
+      String? token = await AuthService().getFirebaseToken();
 
       final response = await http.post(
-        Uri.parse('$baseUrl/complaints/submit?user_id=$userId'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
+        Uri.parse('$baseUrl/complaints/submit'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(data),
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        print("Response: $result");
+        return result;
+      } else {
+        print("Submit error (${response.statusCode}): ${response.body}");
       }
       return null;
     } catch (e) {
@@ -394,6 +389,23 @@ class ApiService {
       return null;
     } catch (e) {
       print('Get rating error: $e');
+      return null;
+    }
+  }
+
+  /// Get user statistics
+  Future<Map<String, dynamic>?> getUserStats(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/stats/$userId'),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Get user stats error: $e');
       return null;
     }
   }

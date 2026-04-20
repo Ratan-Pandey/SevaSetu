@@ -385,12 +385,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                         const SizedBox(height: 16),
 
                       // Actions
-                      if (_data!['assigned_officer'] == null)
-                        ElevatedButton(
-                          onPressed: _assignToMe,
-                          child: const Text('Assign to Me'),
-                        ),
-                      const SizedBox(height: 8),
+
                       ElevatedButton(
                         onPressed: _showUpdateDialog,
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.green),

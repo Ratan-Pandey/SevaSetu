@@ -25,6 +25,15 @@ class AdminLoginRequest(BaseModel):
     password: str
 
 
+class OfficerCreate(BaseModel):
+    """Administrative creation of a new officer"""
+    name: str
+    email: EmailStr
+    password: str
+    employee_id: str
+    department: str
+
+
 class AuthResponse(BaseModel):
     """Authentication response"""
     user_id: int
@@ -90,6 +99,9 @@ class ComplaintResponse(BaseModel):
     ai_urgency: Optional[str]
     delay_risk_label: Optional[str]
     delay_risk_score: Optional[float]
+    priority_score: Optional[float] = None 
+    priority_label: Optional[str] = None
+    assigned_officer_id: Optional[int] = None
     status: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -169,3 +181,14 @@ class NotificationResponse(BaseModel):
     is_read: bool
     created_at: datetime
     complaint_tracking_id: Optional[str]
+
+
+# ===== CHAT SCHEMAS =====
+
+class ChatMessageCreate(BaseModel):
+    sender_id: int
+    sender_type: str  # 'user' or 'officer'
+    message: str
+
+
+# ===== FCM ENDPOINTS =====

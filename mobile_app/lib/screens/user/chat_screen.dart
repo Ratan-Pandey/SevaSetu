@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../../services/chat_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 class ChatScreen extends StatefulWidget {
   final int complaintId;
   final String trackingId;
+  final String userType;
   
   const ChatScreen({
     super.key,
     required this.complaintId,
     required this.trackingId,
+    this.userType = "user",
   });
 
   @override
@@ -25,12 +30,13 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _isOfficerTyping = false;
+  WebSocket? _socket;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
-    _connectToChat();
+    _connectWebSocket();
   }
 
   Future<void> _loadMessages() async {
@@ -42,34 +48,42 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _connectToChat() {
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final userId = authService.getUserId();
-    
-    if (userId != null) {
-      _chatService.connect(widget.complaintId, userId, 'user');
+  void _connectWebSocket() async {
+    try {
+      // Use standard WebSocket on 10.0.2.2 (Android Emulator localhost) or actual IP
+      final baseUrl = ApiService.baseUrl.replaceAll("http://", "").replaceAll("https://", "");
+      final wsUrl = "ws://$baseUrl/ws/chat/${widget.complaintId}";
       
-      // Listen for new messages
-      _chatService.socket?.on('new_message', (data) {
+      print("Connecting to WebSocket: $wsUrl");
+      _socket = await WebSocket.connect(wsUrl);
+
+      _socket!.listen((data) {
         if (mounted) {
-          setState(() {
-            _messages.add({
-              'sender_id': data['sender_id'],
-              'sender_type': data['sender_type'],
-              'message': data['message'],
-              'created_at': data['timestamp'],
+          try {
+            final decodedMessage = jsonDecode(data);
+            
+            // Prevent self-duplicates (we already did optimistic update)
+            // But we need to handle incoming messages from the other side
+            setState(() {
+              _messages.add({
+                "message": decodedMessage['message'],
+                "sender_type": decodedMessage['sender_type'],
+                "created_at": decodedMessage['timestamp'] ?? DateTime.now().toIso8601String(),
+              });
             });
-          });
-          _scrollToBottom();
+            _scrollToBottom();
+          } catch (e) {
+            print("Error decoding WebSocket message: $e");
+          }
         }
+      }, onError: (err) {
+        print("WebSocket Error: $err");
+      }, onDone: () {
+        print("WebSocket Connection Closed");
       });
-      
-      // Listen for typing indicator
-      _chatService.socket?.on('user_typing', (data) {
-        if (data['user_type'] == 'officer' && mounted) {
-          setState(() => _isOfficerTyping = data['is_typing']);
-        }
-      });
+
+    } catch (e) {
+      print("WebSocket Connection Failed: $e");
     }
   }
 
@@ -83,18 +97,33 @@ class _ChatScreenState extends State<ChatScreen> {
     if (userId == null) return;
     
     final message = _messageController.text.trim();
+    _messageController.clear();
+
+    // Optimistic Update: Add message instantly to UI
+    setState(() {
+      _messages.add({
+        'sender_id': userId,
+        'sender_type': widget.userType,
+        'message': message,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    });
+    _scrollToBottom();
     
-    // Send via WebSocket
-    _chatService.sendMessage(widget.complaintId, userId, 'user', message);
+    // Send via WebSocket instantly as structured JSON
+    final wsMessage = jsonEncode({
+      "message": message,
+      "sender_type": widget.userType,
+      "timestamp": DateTime.now().toIso8601String()
+    });
+    _socket?.add(wsMessage);
     
     // Save to database
     await apiService.sendChatMessage(widget.complaintId, {
       'sender_id': userId,
-      'sender_type': 'user',
+      'sender_type': widget.userType,
       'message': message,
     });
-    
-    _messageController.clear();
   }
 
   void _scrollToBottom() {
@@ -139,11 +168,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
-                        Text('No messages yet', style: TextStyle(color: Colors.grey.shade600)),
+                        Text('No messages yet', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         const Text(
-                          'Start a conversation with the assigned officer',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                          'Say hi 👋 to start conversation with the assigned officer',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -193,14 +222,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         vertical: 10,
                       ),
                     ),
-                    onChanged: (text) {
-                      // Send typing indicator
-                      _chatService.sendTyping(
-                        widget.complaintId,
-                        'user',
-                        text.isNotEmpty,
-                      );
-                    },
+                      onChanged: (text) {
+                        // Send typing indicator
+                        _chatService.sendTyping(
+                          widget.complaintId,
+                          widget.userType,
+                          text.isNotEmpty,
+                        );
+                      },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -250,6 +279,18 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (!isMe)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Text(
+                  "Officer",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey,
+                  ),
+                ),
+              ),
             Text(
               message['message'],
               style: TextStyle(
@@ -258,12 +299,25 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              _formatTime(message['created_at']),
-              style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.grey.shade600,
-                fontSize: 11,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _formatTime(message['created_at']),
+                  style: TextStyle(
+                    color: isMe ? Colors.white70 : Colors.grey.shade600,
+                    fontSize: 11,
+                  ),
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    message['is_read'] == true ? Icons.done_all : Icons.done,
+                    size: 14,
+                    color: isMe ? Colors.white70 : Colors.grey.shade600,
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -283,7 +337,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _chatService.disconnect();
+    _socket?.close();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();

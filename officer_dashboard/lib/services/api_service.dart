@@ -35,7 +35,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/officer/dashboard/$officerId'),
       );
-
+ 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -45,12 +45,34 @@ class ApiService {
       return null;
     }
   }
-
-  /// Get complaints for officer
-  Future<List<dynamic>?> getOfficerComplaints(int officerId) async {
+ 
+  /// Get officer statistics (priority based)
+  Future<Map<String, dynamic>?> getOfficerStats(int officerId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/officer/complaints/$officerId'),
+        Uri.parse('$baseUrl/officer/stats/$officerId'),
+      );
+ 
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Get officer stats error: $e');
+      return null;
+    }
+  }
+
+  /// Get complaints for officer
+  Future<List<dynamic>?> getOfficerComplaints(
+    int officerId, {
+    String search = "",
+    String sortBy = "priority",
+    String priority = "",
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/officer/complaints/$officerId?search=$search&sort_by=$sortBy&priority=$priority'),
       );
 
       if (response.statusCode == 200) {
@@ -139,10 +161,10 @@ class ApiService {
   // ============================================================================
 
   /// Get chat messages for a complaint
-  Future<List<dynamic>?> getChatMessages(int complaintId) async {
+  Future<List<dynamic>?> getChatMessages(int complaintId, String userType) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/chat/$complaintId/messages'),
+        Uri.parse('$baseUrl/chat/$complaintId/messages?user_type=$userType'),
       );
 
       if (response.statusCode == 200) {

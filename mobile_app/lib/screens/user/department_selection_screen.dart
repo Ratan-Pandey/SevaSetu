@@ -8,6 +8,13 @@ class DepartmentSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final departments = [
       {
+        'name': 'Police Department',
+        'description': 'Crime, theft, kidnapping, emergencies, safety',
+        'icon': Icons.local_police,
+        'color': const Color(0xFF3F51B5),
+        'gradient': [const Color(0xFF3F51B5), const Color(0xFF303F9F)],
+      },
+      {
         'name': 'Power Department',
         'description': 'Electricity issues, power cuts, transformer problems',
         'icon': Icons.electrical_services,
