@@ -14,7 +14,7 @@ def seed_all_officers():
     officers_data = [
         {
             "email": "power@test.com",
-            "password": "password123",
+            "password": "power123",
             "name": "Power Dept Officer",
             "employee_id": "OFF_PWR_001",
             "department": "Power Department",
@@ -23,7 +23,7 @@ def seed_all_officers():
         },
         {
             "email": "water@test.com",
-            "password": "password123",
+            "password": "water123",
             "name": "Water Dept Officer",
             "employee_id": "OFF_WTR_001",
             "department": "Water Department",
@@ -32,7 +32,7 @@ def seed_all_officers():
         },
         {
             "email": "municipal@test.com",
-            "password": "password123",
+            "password": "municipal123",
             "name": "Municipal Officer",
             "employee_id": "OFF_MUN_001",
             "department": "Municipal Services",
@@ -41,7 +41,7 @@ def seed_all_officers():
         },
         {
             "email": "health@test.com",
-            "password": "password123",
+            "password": "health123",
             "name": "Health Officer",
             "employee_id": "OFF_HLT_001",
             "department": "Health Department",
@@ -49,8 +49,8 @@ def seed_all_officers():
             "phone_number": "+91 9876543204"
         },
         {
-            "email": "corruption@test.com",
-            "password": "corruption123",
+            "email": "vigilance@test.com",
+            "password": "vigilance123",
             "name": "Vigilance Officer",
             "employee_id": "OFF_VIG_001",
             "department": "Vigilance Department",
@@ -59,7 +59,7 @@ def seed_all_officers():
         },
         {
             "email": "officer@test.com",
-            "password": "password123",
+            "password": "officer123",
             "name": "General Power Officer",
             "employee_id": "OFF_GEN_001",
             "department": "Power Department",
@@ -68,7 +68,7 @@ def seed_all_officers():
         },
         {
             "email": "police@test.com",
-            "password": "password123",
+            "password": "police123",
             "name": "Police Dept Officer",
             "employee_id": "OFF_POL_001",
             "department": "Police Department",
