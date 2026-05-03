@@ -2,8 +2,8 @@
 CRUD operations for database
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
-from models import User, Officer, Complaint, ComplaintUpdate, Notification, AIPrediction, generate_tracking_id
+from sqlalchemy import and_, or_, func, case
+from models import User, Officer, Complaint, ComplaintUpdate, Notification, AIPrediction, generate_tracking_id, UserReport
 from passlib.context import CryptContext
 from typing import Optional
 
@@ -60,7 +60,11 @@ def get_officer_by_email(db: Session, email: str) -> Optional[Officer]:
 
 def get_all_officers(db: Session):
     """Retrieve all officers for management dashboard"""
-    officers = db.query(Officer).all()
+    # Filter out System Admin and Admin department from the display list
+    officers = db.query(Officer).filter(
+        Officer.name != "System Admin",
+        Officer.department != "Admin"
+    ).all()
 
     return [
         {
@@ -99,22 +103,62 @@ def create_officer(db: Session, email: str, password: str, name: str,
 
 # ===== COMPLAINT CRUD =====
 
-def create_complaint(db: Session, user_id: int, text: str, selected_department: str,
-                    ai_result: dict, latitude: float = None, longitude: float = None,
-                    location_address: str = None) -> Complaint:
-    """Create new complaint with AI predictions"""
-    tracking_id = generate_tracking_id()
-    
-    # 🔥 AUTO ASSIGNMENT LOGIC (Least Busy Officer)
+def get_least_busy_officer(db: Session, department: str) -> Optional[int]:
+    """
+    Find the least busy officer in a specific department.
+    Includes aggressive normalization (Step 5) and least-busy logic.
+    """
+    # Step 5: Normalize department
+    dept = department.strip().lower()
+
+    if "police" in dept:
+        dept = "police"
+    elif "water" in dept:
+        dept = "water"
+    elif "electric" in dept or "power" in dept:
+        # Normalize to Power Department if that's the DB standard, 
+        # or use standard 'electricity' as requested.
+        # We'll use 'power department' as it's common in this codebase
+        dept = "power department"
+    elif "health" in dept:
+        dept = "health"
+    elif "municipal" in dept:
+        dept = "municipal"
+    elif "vigilance" in dept or "corruption" in dept:
+        dept = "vigilance department"
+
+    # Search for officer in the normalized department
     officer = (
         db.query(Officer)
-        .filter(Officer.department == selected_department)
+        .filter(func.lower(Officer.department) == dept)
         .outerjoin(Complaint, Officer.id == Complaint.assigned_officer_id)
         .group_by(Officer.id)
         .order_by(func.count(Complaint.id).asc())
         .first()
     )
-    assigned_officer_id = officer.id if officer else None
+    
+    # Second pass: If still not found, try a looser contains-match
+    if not officer:
+        officer = (
+            db.query(Officer)
+            .filter(Officer.department.ilike(f"%{dept}%"))
+            .outerjoin(Complaint, Officer.id == Complaint.assigned_officer_id)
+            .group_by(Officer.id)
+            .order_by(func.count(Complaint.id).asc())
+            .first()
+        )
+        
+    return officer.id if officer else None
+
+
+def create_complaint(db: Session, user_id: int, text: str, selected_department: str,
+                    ai_result: dict, latitude: float, longitude: float,
+                    location_address: str, incident_location: str) -> Complaint:
+    """Create new complaint with AI predictions and AUTO-ASSIGNMENT"""
+    tracking_id = generate_tracking_id()
+    
+    # 🔥 AUTO ASSIGNMENT
+    assigned_officer_id = get_least_busy_officer(db, selected_department)
 
     complaint = Complaint(
         tracking_id=tracking_id,
@@ -130,11 +174,12 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
         priority_label=ai_result.get('priority_label'),
         priority_explanation=ai_result.get('explanation'),
         final_department=ai_result.get('department'),
-        status='under_review' if officer else 'submitted',
+        status='submitted',
         assigned_officer_id=assigned_officer_id,
         latitude=latitude,
         longitude=longitude,
-        location_address=location_address
+        location_address=location_address,
+        incident_location=incident_location
     )
     db.add(complaint)
     db.flush()  # Get complaint.id
@@ -151,16 +196,6 @@ def create_complaint(db: Session, user_id: int, text: str, selected_department: 
         priority_label=ai_result.get('priority_label')
     )
     db.add(ai_prediction)
-    
-    # 🚀 Create success notification
-    notification = Notification(
-        user_id=user_id,
-        complaint_id=complaint.id,
-        title="Complaint Submitted Successfully",
-        message=f"Your complaint {complaint.tracking_id} has been submitted and is under review.",
-        notification_type="status_update"
-    )
-    db.add(notification)
     
     db.commit()
     db.refresh(complaint)
@@ -196,6 +231,8 @@ def get_user_stats(db: Session, user_id: int):
 
 def get_admin_stats(db: Session):
     """Get overall system statistics for admin dashboard"""
+    from sqlalchemy import func
+    
     total = db.query(Complaint).count()
 
     resolved = db.query(Complaint).filter(
@@ -206,15 +243,38 @@ def get_admin_stats(db: Session):
         Complaint.status.in_(["submitted", "under_review", "in_progress"])
     ).count()
 
-    high_priority = db.query(Complaint).filter(
-        Complaint.priority_label == "High"
-    ).count()
+    # Priority breakdown
+    critical = db.query(Complaint).filter(Complaint.priority_label == "Critical").count()
+    high_priority = db.query(Complaint).filter(Complaint.priority_label == "High").count()
+    medium_priority = db.query(Complaint).filter(Complaint.priority_label == "Medium").count()
+    low_priority = db.query(Complaint).filter(Complaint.priority_label == "Low").count()
+
+    # Status breakdown
+    submitted = db.query(Complaint).filter(Complaint.status == "submitted").count()
+    under_review = db.query(Complaint).filter(Complaint.status == "under_review").count()
+    in_progress = db.query(Complaint).filter(Complaint.status == "in_progress").count()
+
+    # Resolution rate
+    resolution_rate = round((resolved / total * 100), 1) if total > 0 else 0
+
+    # Today's complaints
+    from datetime import datetime, timedelta
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_complaints = db.query(Complaint).filter(Complaint.created_at >= today_start).count()
 
     return {
         "total": total,
         "resolved": resolved,
         "pending": pending,
-        "high_priority": high_priority
+        "high_priority": high_priority,
+        "critical": critical,
+        "medium_priority": medium_priority,
+        "low_priority": low_priority,
+        "submitted": submitted,
+        "under_review": under_review,
+        "in_progress": in_progress,
+        "resolution_rate": resolution_rate,
+        "today_complaints": today_complaints,
     }
 
 
@@ -241,50 +301,77 @@ def get_department_stats(db: Session):
             Complaint.status != "resolved"
         ).count()
 
+        # Avoid division by zero
+        res_rate = (resolved / total * 100) if total > 0 else 0
+
         result.append({
             "department": dept,
             "total": total,
             "resolved": resolved,
-            "pending": pending
+            "pending": pending,
+            "resolution_rate": round(res_rate, 1)
         })
 
     return result
 
 
 def get_top_problem_departments(db: Session):
-    """Identify departments struggling with high pending ratios"""
-    departments = db.query(Complaint.selected_department).distinct().all()
+    """Identify categories or departments struggling with high pending ratios"""
+    # Let's focus on CATEGORIES (Types of problems) as that's usually what 'Top Problems' refers to
+    # We'll get categories that have at least one pending complaint
+    categories = db.query(Complaint.ai_category).filter(Complaint.ai_category.isnot(None)).distinct().all()
 
     result = []
 
-    for dept_tuple in departments:
-        dept = dept_tuple[0]
+    for cat_tuple in categories:
+        cat = cat_tuple[0]
+        if not cat: continue
 
         total = db.query(Complaint).filter(
-            Complaint.selected_department == dept
+            Complaint.ai_category == cat
         ).count()
 
-        resolved = db.query(Complaint).filter(
-            Complaint.selected_department == dept,
-            Complaint.status == "resolved"
+        # ONLY count active statuses as pending (submitted, under_review, in_progress)
+        # Exclude 'resolved' and 'closed_by_user'
+        pending = db.query(Complaint).filter(
+            Complaint.ai_category == cat,
+            Complaint.status.in_(['submitted', 'under_review', 'in_progress'])
         ).count()
+        
+        # Only include if there are pending issues
+        if pending > 0:
+            pending_ratio = (pending / total) if total > 0 else 0
+            result.append({
+                "department": cat, # Keep key as 'department' for frontend compatibility or change both
+                "pending": pending,
+                "total": total,
+                "pending_ratio": round(pending_ratio, 2)
+            })
 
-        pending = total - resolved
+    # Sort by quantity of pending issues, then by ratio
+    result.sort(key=lambda x: (x["pending"], x["pending_ratio"]), reverse=True)
 
-        # Avoid division by zero
-        pending_ratio = (pending / total) if total > 0 else 0
+    # If result is empty, fall back to departments to avoid empty section
+    if not result:
+        depts = db.query(Complaint.selected_department).distinct().all()
+        for d_tuple in depts:
+            d = d_tuple[0]
+            t = db.query(Complaint).filter(Complaint.selected_department == d).count()
+            p = db.query(Complaint).filter(
+                Complaint.selected_department == d,
+                Complaint.status.in_(['submitted', 'under_review', 'in_progress'])
+            ).count()
+            
+            if p > 0:
+                result.append({
+                    "department": d,
+                    "pending": p,
+                    "total": t,
+                    "pending_ratio": round(p/t if t > 0 else 0, 2)
+                })
+        result.sort(key=lambda x: x["pending_ratio"], reverse=True)
 
-        result.append({
-            "department": dept,
-            "pending": pending,
-            "total": total,
-            "pending_ratio": round(pending_ratio, 2)
-        })
-
-    # Sort by worst performing (highest pending ratio)
-    result.sort(key=lambda x: x["pending_ratio"], reverse=True)
-
-    return result[:5]  # top 5 problem departments
+    return result[:10] # Limit to top 10
 
 
 def get_complaint_by_id(db: Session, complaint_id: int) -> Optional[Complaint]:
@@ -297,36 +384,83 @@ def get_complaints_for_officer(db: Session, department: str, officer_id: Optiona
                                priority: Optional[str] = None,
                                sort_by: str = "priority", limit: int = 50):
     """Get complaints for officer dashboard"""
-    query = db.query(Complaint).filter(Complaint.selected_department == department)
-    
+    from sqlalchemy import or_
+
+    dept_clean = department.strip().lower()
+
+    # Always include: explicitly assigned to this officer OR matching department (case-insensitive)
     if officer_id:
-        query = query.filter(Complaint.assigned_officer_id == officer_id)
-    
+        query = db.query(Complaint).filter(
+            or_(
+                Complaint.assigned_officer_id == officer_id,
+                Complaint.selected_department.ilike(f"%{dept_clean}%")
+            )
+        )
+    else:
+        query = db.query(Complaint).filter(
+            Complaint.selected_department.ilike(f"%{dept_clean}%")
+        )
+
     if status:
         query = query.filter(Complaint.status == status)
 
     if search:
         search_term = f"%{search.lower()}%"
         query = query.filter(
-            (Complaint.text.ilike(search_term)) |
-            (Complaint.tracking_id.ilike(search_term))
+            or_(
+                Complaint.text.ilike(search_term),
+                Complaint.tracking_id.ilike(search_term)
+            )
         )
 
-    if priority:
+    if priority and priority.strip():
         query = query.filter(Complaint.priority_label == priority)
-    
-    if sort_by == "priority":
-        query = query.order_by(Complaint.priority_score.desc())
-    elif sort_by == "latest":
-        query = query.order_by(Complaint.created_at.desc())
-    elif sort_by == "oldest":
-        query = query.order_by(Complaint.created_at.asc())
-    elif sort_by == "status":
-        query = query.order_by(Complaint.status.asc())
-    else:
-        query = query.order_by(Complaint.priority_score.desc())
-    
-    return query.limit(limit).all()
+
+    # Group 1: Active (under_review, in_progress, submitted)
+    # Group 2: Resolved
+    # Group 3: Closed by User
+    status_order = case(
+        (Complaint.status.in_(['in_progress', 'under_review', 'submitted']), 0),
+        (Complaint.status == 'resolved', 1),
+        (Complaint.status == 'closed_by_user', 2),
+        else_=3
+    )
+
+    # Define custom priority ordering weights
+    priority_order = case(
+        (Complaint.priority_label == 'Critical', 0),
+        (Complaint.priority_label == 'High', 1),
+        (Complaint.priority_label == 'Medium', 2),
+        (Complaint.priority_label == 'Low', 3),
+        else_=4
+    )
+
+    # Unified Sorting: Group by STATUS first, then PRIORITY inside each group, then TIME
+    query = query.order_by(status_order.asc(), priority_order.asc(), Complaint.created_at.desc())
+
+    results = query.limit(limit).all()
+    print(f"✅ [QUERY] officer_id={officer_id} dept='{department}' → {len(results)} complaints found")
+    return results
+
+
+def get_top_officers_by_department(db: Session, department: str, limit: int = 5):
+    """Retrieve top performing officers for a specific department based on resolved complaints"""
+    from sqlalchemy import func
+    top_officers = (
+        db.query(
+            Officer.name,
+            func.count(Complaint.id).label('resolved_count')
+        )
+        .join(Complaint, Officer.id == Complaint.assigned_officer_id)
+        # Use LIKE or case-insensitive comparison to handle "Police" vs "Police Department"
+        .filter(func.lower(Officer.department).contains(func.lower(department.replace(" Department", ""))))
+        .filter(Complaint.status == 'resolved')
+        .group_by(Officer.id)
+        .order_by(func.count(Complaint.id).desc())
+        .limit(limit)
+        .all()
+    )
+    return [{"name": o[0], "count": o[1]} for o in top_officers]
 
 
 def get_complaint_stats(db: Session, department: str):
@@ -421,11 +555,54 @@ def mark_notification_read(db: Session, notification_id: int):
     if notification:
         notification.is_read = True
         db.commit()
-    return notification
+    return True
+
+# ===== USER REPORTING & SUSPENSION =====
+
+def report_user(db: Session, user_id: int, officer_id: int, reason: Optional[str] = None):
+    """
+    Report a user. If they get 5 reports from different officers, suspend them.
+    """
+    # Check if this officer already reported this user
+    existing = db.query(UserReport).filter(
+        UserReport.user_id == user_id,
+        UserReport.officer_id == officer_id
+    ).first()
+    
+    if existing:
+        return {"success": False, "message": "You have already reported this user"}
+    
+    new_report = UserReport(
+        user_id=user_id,
+        officer_id=officer_id,
+        reason=reason
+    )
+    db.add(new_report)
+    
+    # Check total reports from DIFFERENT officers
+    report_count = db.query(UserReport).filter(UserReport.user_id == user_id).count()
+    
+    if report_count >= 5:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.is_suspended = True
+            
+    db.commit()
+    return {"success": True, "report_count": report_count, "is_suspended": report_count >= 5}
+
+def lift_suspension(db: Session, user_id: int):
+    """Lift suspension for a user"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.is_suspended = False
+        db.commit()
+        return True
+    return False
 
 
 def get_unread_count(db: Session, user_id: int) -> int:
     """Get unread notification count"""
+    from sqlalchemy import and_
     return db.query(Notification).filter(
         and_(Notification.user_id == user_id, Notification.is_read == False)
     ).count()
@@ -434,14 +611,94 @@ def get_unread_count(db: Session, user_id: int) -> int:
 # ===== ADMIN CRUD =====
 
 def get_all_users(db: Session, skip: int = 0, limit: int = 100):
-    """Get all registered users"""
-    return db.query(User).offset(skip).limit(limit).all()
+    """Get all registered users with their complaint and report statistics"""
+    users = db.query(User).offset(skip).limit(limit).all()
+    
+    result = []
+    for u in users:
+        # Count complaints
+        complaint_count = db.query(Complaint).filter(Complaint.user_id == u.id).count()
+        # Fetch reports
+        reports = db.query(UserReport).filter(UserReport.user_id == u.id).all()
+        report_list = [
+            {
+                "reason": r.reason,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "officer_id": r.officer_id
+            } for r in reports
+        ]
+        
+        result.append({
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "phone_number": u.phone_number,
+            "address": u.address,
+            "city": u.city,
+            "state": u.state,
+            "pincode": u.pincode,
+            "is_suspended": u.is_suspended,
+            "complaint_count": complaint_count,
+            "report_count": len(report_list),
+            "reports": report_list,
+            "aadhaar_number": u.aadhaar_number,
+            "created_at": u.created_at.isoformat() if u.created_at else None
+        })
+        
+    return result
 
 
-def get_all_officers(db: Session, skip: int = 0, limit: int = 100):
-    """Get all government officers"""
-    return db.query(Officer).offset(skip).limit(limit).all()
 
+
+
+def create_officer_minimal(db: Session, name: str, email: str, employee_id: str, department: str, password: str):
+    """Admin creates officer account with just login credentials"""
+    from security import get_password_hash
+    password_hash = get_password_hash(password)
+    
+    db_officer = Officer(
+        name=name,
+        email=email,
+        employee_id=employee_id,
+        department=department,
+        password_hash=password_hash,
+        is_active=True,
+        profile_completed=False
+    )
+    db.add(db_officer)
+    db.commit()
+    db.refresh(db_officer)
+    return db_officer
+
+def update_officer_profile(db: Session, officer_id: int, name: str, department: str, phone_number: str = None, designation: str = None, govt_id_path: str = None):
+    """Officer updates their profile information"""
+    db_officer = db.query(Officer).filter(Officer.id == officer_id).first()
+    if db_officer:
+        db_officer.name = name
+        db_officer.department = department
+        if phone_number is not None:
+            db_officer.phone_number = phone_number
+        if designation is not None:
+            db_officer.designation = designation
+        if govt_id_path is not None:
+            db_officer.govt_id_path = govt_id_path
+            
+        db_officer.profile_completed = True
+        db.commit()
+        db.refresh(db_officer)
+        return db_officer
+    return None
+
+def delete_officer(db: Session, officer_id: int):
+    """Admin deletes an officer account"""
+    db_officer = db.query(Officer).filter(Officer.id == officer_id).first()
+    if db_officer:
+        # Check if officer has assigned complaints - handle as needed
+        # For now, just delete
+        db.delete(db_officer)
+        db.commit()
+        return True
+    return False
 
 def get_all_complaints(db: Session, skip: int = 0, limit: int = 100):
     """Get all complaints system-wide"""
@@ -474,4 +731,48 @@ def get_system_analytics(db: Session):
         "complaints_by_status": status_dict,
         "complaints_by_department": dept_dict,
         "high_urgency_count": high_urgency
+    }
+
+
+def get_complaint_detail(db: Session, complaint_id: int):
+    """Fetch complaint with all updates and relations for timeline"""
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        return None
+        
+    # Map updates to include officer names
+    detailed_updates = []
+    for up in complaint.updates:
+        detailed_updates.append({
+            "id": up.id,
+            "update_text": up.update_text,
+            "status_changed_from": up.status_changed_from,
+            "status_changed_to": up.status_changed_to,
+            "officer_name": up.officer.name if up.officer else "Unknown",
+            "created_at": up.created_at
+        })
+    
+    # Sort updates by date
+    detailed_updates.sort(key=lambda x: x['created_at'], reverse=True)
+
+    return {
+        "id": complaint.id,
+        "tracking_id": complaint.tracking_id,
+        "text": complaint.text,
+        "selected_department": complaint.selected_department,
+        "ai_category": complaint.ai_category,
+        "ai_urgency": complaint.ai_urgency,
+        "delay_risk_label": complaint.delay_risk_label,
+        "delay_risk_score": complaint.delay_risk_score,
+        "status": complaint.status,
+        "assigned_officer_name": complaint.assigned_officer.name if complaint.assigned_officer else None,
+        "latitude": complaint.latitude,
+        "longitude": complaint.longitude,
+        "location_address": complaint.location_address,
+        "incident_location": complaint.incident_location,
+        "created_at": complaint.created_at,
+        "resolved_at": complaint.resolved_at,
+        "updates": detailed_updates,
+        "user_name": complaint.user.name if complaint.user else "Citizen",
+        "user_phone": complaint.user.phone_number if complaint.user else None
     }

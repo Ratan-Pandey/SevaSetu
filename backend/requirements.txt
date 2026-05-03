@@ -9,6 +9,7 @@ psycopg2-binary==2.9.10
 
 # Validation
 pydantic==2.10.3
+email-validator==2.2.0
 
 # Authentication & Security
 passlib[bcrypt]==1.7.4

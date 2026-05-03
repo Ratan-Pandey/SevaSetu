@@ -7,28 +7,42 @@ import firebase_admin
 from firebase_admin import credentials, auth
 from typing import Optional
 
+import os
+import json
+
 # Initialize Firebase Admin SDK
 def initialize_firebase():
-    """
-    Initialize Firebase Admin SDK
-    
-    IMPORTANT: You need a service account JSON file from Firebase Console
-    Steps to get it:
-    1. Go to Firebase Console: https://console.firebase.google.com/
-    2. Select your project (or create new)
-    3. Go to Project Settings > Service Accounts
-    4. Click "Generate New Private Key"
-    5. Save as firebase-service-account.json in backend folder
-    """
     try:
-        # Try to initialize (skip if already initialized)
+        # Try to get app to see if already initialized
         firebase_admin.get_app()
         print("✅ Firebase already initialized")
+        return
     except ValueError:
-        # Initialize with service account
-        cred = credentials.Certificate("firebase-service-account.json")
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase Admin SDK initialized")
+        pass
+
+    # 1. Try to load from environment variable (Best for production)
+    service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+    if service_account_info:
+        try:
+            cert_dict = json.loads(service_account_info)
+            cred = credentials.Certificate(cert_dict)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK initialized from Environment Variable")
+            return
+        except Exception as e:
+            print(f"⚠️ Failed to initialize Firebase from Env Var: {e}")
+
+    # 2. Try to load from local file
+    file_path = "firebase-service-account.json"
+    if os.path.exists(file_path):
+        try:
+            cred = credentials.Certificate(file_path)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK initialized from local file")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize Firebase from local file: {e}")
+    else:
+        print("⚠️ Firebase service account not found. Firebase features will be disabled or use MOCK.")
 
 
 def verify_firebase_token(id_token: str) -> Optional[dict]:

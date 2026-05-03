@@ -6,7 +6,12 @@ import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'services/socket_service.dart';
 import 'screens/splash_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,12 +28,18 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
         Provider(create: (_) => ApiService()),
-        Provider(create: (_) => NotificationService()),
+        Provider(create: (_) => SocketService(serverUrl: ApiService.baseUrl)),
+        ChangeNotifierProxyProvider<SocketService, AuthService>(
+          create: (_) => AuthService(),
+          update: (_, socket, auth) => auth!..setSocketService(socket),
+        ),
+        ChangeNotifierProvider(create: (_) => NotificationService()),
       ],
       child: MaterialApp(
         title: 'SevaSetu',
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: scaffoldMessengerKey,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF667eea)),

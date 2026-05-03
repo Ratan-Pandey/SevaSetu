@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../services/socket_service.dart';
+import '../../services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:provider/provider.dart';
@@ -24,6 +26,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     loadNotifications();
+    
+    // Listen for real-time notifications to refresh list
+    final socketService = Provider.of<SocketService>(context, listen: false);
+    socketService.notifications.listen((data) {
+      if (mounted) loadNotifications();
+    });
   }
 
   Future<void> loadNotifications() async {
@@ -143,6 +151,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 setState(() {
                   notification['is_read'] = true;
                 });
+                // Sync global unread count
+                Provider.of<NotificationService>(context, listen: false).markAsRead();
               }
             } catch (e) {
               debugPrint("Error marking notification as read: $e");

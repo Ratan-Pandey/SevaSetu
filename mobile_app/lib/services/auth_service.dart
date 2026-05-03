@@ -3,10 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'socket_service.dart';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  SocketService? _socketService;
+
+  void setSocketService(SocketService service) {
+    _socketService = service;
+  }
   
   User? _user;
   Map<String, dynamic>? _userData;
@@ -78,6 +84,9 @@ class AuthService extends ChangeNotifier {
           await prefs.setString('name', response['name']);
           await prefs.setBool('profile_completed', response['profile_completed'] ?? false);
           
+          // Connect socket immediately
+          _socketService?.connect(response['user_id']);
+          
           _isLoading = false;
           notifyListeners();
           return true;
@@ -103,12 +112,19 @@ class AuthService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       
       if (prefs.containsKey('user_id')) {
+        final userId = prefs.getInt('user_id');
         _userData = {
-          'user_id': prefs.getInt('user_id'),
+          'user_id': userId,
           'email': prefs.getString('email'),
           'name': prefs.getString('name'),
           'profile_completed': prefs.getBool('profile_completed') ?? false,
         };
+        
+        // Connect socket for existing user
+        if (userId != null) {
+          _socketService?.connect(userId);
+        }
+        
         notifyListeners();
       }
     } catch (e) {
@@ -141,6 +157,7 @@ class AuthService extends ChangeNotifier {
       
       _user = null;
       _userData = null;
+      _socketService?.disconnect();
       notifyListeners();
     } catch (e) {
       print('Sign out error: $e');

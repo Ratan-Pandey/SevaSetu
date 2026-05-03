@@ -25,15 +25,22 @@ class ComplaintFormScreen extends StatefulWidget {
 class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _complaintController = TextEditingController();
+  final _incidentLocationController = TextEditingController();
   bool _isSubmitting = false;
-  File? _selectedImage;
+  
+  @override
+  void initState() {
+    super.initState();
+    _getLocation(); // Fetch location by default
+  }
+  XFile? _selectedImage; // ✅ FIXED: XFile is cross-platform
   final ImagePicker _picker = ImagePicker();
   Map<String, dynamic>? _locationData;
   bool _fetchingLocation = false;
   
   final AudioService _audioService = AudioService();
   final AudioPlayer _audioPlayer = AudioPlayer();
-  String? _recordedAudioPath;
+  String? _recordedAudioPath; // This will store the path/blob
   bool _isRecording = false;
   int _recordingDuration = 0;
   Timer? _recordingTimer;
@@ -42,11 +49,21 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
     setState(() => _fetchingLocation = true);
     final locationService = LocationService();
     final location = await locationService.getCurrentLocation();
+    
     if (mounted) {
       setState(() {
         _locationData = location;
         _fetchingLocation = false;
       });
+      
+      if (location == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          _buildSnackBar(
+            'Could not get location. Ensure GPS is ON and permissions are granted.',
+            Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -60,7 +77,7 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
       );
       
       if (image != null) {
-        setState(() => _selectedImage = File(image.path));
+        setState(() => _selectedImage = image);
       }
     } catch (e) {
       print('Image picker error: $e');
@@ -69,25 +86,8 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
 
   Future<bool> _uploadImage(int complaintId) async {
     if (_selectedImage == null) return true;
-    
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://127.0.0.1:8000/complaints/$complaintId/upload-image'),
-      );
-      
-      request.files.add(await http.MultipartFile.fromPath(
-        'file', 
-        _selectedImage!.path,
-        contentType: MediaType('image', 'jpeg'), // Best effort for common images
-      ));
-      
-      final response = await request.send();
-      return response.statusCode == 200;
-    } catch (e) {
-      print('Upload error: $e');
-      return false;
-    }
+    final apiService = Provider.of<ApiService>(context, listen: false);
+    return await apiService.uploadComplaintImage(complaintId, _selectedImage!);
   }
 
   Future<void> _startRecording() async {
@@ -118,12 +118,16 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
 
   Future<void> _playAudio() async {
     if (_recordedAudioPath != null) {
-      await _audioPlayer.play(DeviceFileSource(_recordedAudioPath!));
+      if (kIsWeb) {
+        await _audioPlayer.play(UrlSource(_recordedAudioPath!));
+      } else {
+        await _audioPlayer.play(DeviceFileSource(_recordedAudioPath!));
+      }
     }
   }
 
   Future<void> _deleteRecording() async {
-    if (_recordedAudioPath != null) {
+    if (_recordedAudioPath != null && !kIsWeb) {
       final file = File(_recordedAudioPath!);
       if (await file.exists()) {
         await file.delete();
@@ -134,23 +138,12 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
 
   Future<bool> _uploadAudio(int complaintId) async {
     if (_recordedAudioPath == null) return true;
+    final apiService = Provider.of<ApiService>(context, listen: false);
     
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://127.0.0.1:8000/complaints/$complaintId/upload-audio'),
-      );
-      
-      request.files.add(
-        await http.MultipartFile.fromPath('file', _recordedAudioPath!),
-      );
-      
-      final response = await request.send();
-      return response.statusCode == 200;
-    } catch (e) {
-      print('Audio upload error: $e');
-      return false;
-    }
+    // Ensure we pass an XFile to ApiService
+    final audioFile = XFile(_recordedAudioPath!);
+    
+    return await apiService.uploadComplaintAudio(complaintId, audioFile);
   }
 
   String _formatDuration(int seconds) {
@@ -161,6 +154,14 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
 
   Future<void> _submitComplaint() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_locationData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        _buildSnackBar('Current location is mandatory. Please wait or click Get Location.', Colors.orange),
+      );
+      _getLocation();
+      return;
+    }
 
     setState(() => _isSubmitting = true);
 
@@ -179,11 +180,10 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
     final result = await apiService.submitComplaint({
       'text': _complaintController.text.trim(),
       'selected_department': widget.department,
-      if (_locationData != null) ...{
-        'latitude': _locationData?['latitude'],
-        'longitude': _locationData?['longitude'],
-        'location_address': _locationData?['address'],
-      },
+      'latitude': _locationData!['latitude'],
+      'longitude': _locationData!['longitude'],
+      'location_address': _locationData!['address'],
+      'incident_location': _incidentLocationController.text.trim(),
     });
 
     if (!mounted) return;
@@ -191,12 +191,14 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
     if (result != null) {
       // Upload image if selected
       if (_selectedImage != null) {
-        await _uploadImage(result['id']);
+        bool imageSuccess = await _uploadImage(result['id']);
+        if (!imageSuccess) print("⚠️ Image upload failed");
       }
 
       // Upload audio if recorded
       if (_recordedAudioPath != null) {
-        await _uploadAudio(result['id']);
+        bool audioSuccess = await _uploadAudio(result['id']);
+        if (!audioSuccess) print("⚠️ Audio upload failed");
       }
 
       Navigator.pushReplacement(
@@ -443,6 +445,57 @@ class _ComplaintFormScreenState extends State<ComplaintFormScreen> {
                         ),
                         const SizedBox(height: 20),
 
+                        // Incident Location Field (Manual)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: TextFormField(
+                            controller: _incidentLocationController,
+                            decoration: InputDecoration(
+                              labelText: 'Incident Location / Address *',
+                              hintText: 'Where did the problem occur?',
+                              prefixIcon: const Icon(Icons.place, color: Color(0xFF667eea)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(color: Colors.grey.shade200),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF667eea),
+                                  width: 2,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please provide incident location';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
                         // Image Selection UI
 Container(
   padding: const EdgeInsets.all(16),
@@ -484,7 +537,7 @@ Container(
                       },
                     )
                   : Image.file(
-                      _selectedImage!,
+                      File(_selectedImage!.path),
                       height: 200,
                       width: double.infinity,
                       fit: BoxFit.cover,
@@ -551,7 +604,7 @@ const SizedBox(height: 20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Location (Optional)', 
+                              const Text('Current Submission Location *', 
                                 style: TextStyle(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 12),
                               if (_locationData != null) ...[
@@ -565,12 +618,12 @@ const SizedBox(height: 20),
                                         style: const TextStyle(fontSize: 13),
                                       ),
                                     ),
+                                    IconButton(
+                                      onPressed: _getLocation,
+                                      icon: const Icon(Icons.refresh, color: Colors.blue),
+                                      tooltip: 'Refresh Location',
+                                    ),
                                   ],
-                                ),
-                                TextButton.icon(
-                                  onPressed: () => setState(() => _locationData = null),
-                                  icon: const Icon(Icons.delete),
-                                  label: const Text('Remove'),
                                 ),
                               ] else ...[
                                 ElevatedButton.icon(

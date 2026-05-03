@@ -45,6 +45,9 @@ class User(Base):
     # Phase 4: Push Notifications
     fcm_token = Column(String(255), nullable=True)
     
+    # User Accountability
+    is_suspended = Column(Boolean, default=False)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -52,6 +55,7 @@ class User(Base):
     # Relationships
     complaints = relationship("Complaint", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    reports_received = relationship("UserReport", back_populates="user", cascade="all, delete-orphan")
 
 
 class Officer(Base):
@@ -68,16 +72,19 @@ class Officer(Base):
     password_hash = Column(String(255), nullable=False)
     
     # Profile
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=True)
     employee_id = Column(String(50), unique=True, nullable=False)
-    department = Column(String(50), nullable=False)
+    department = Column(String(50), nullable=True)
     # Departments: Power Department, Water Department, Municipal Services, 
     #              Health Department, Vigilance Department
     designation = Column(String(50), default='Officer')
     phone_number = Column(String(15))
     
+    govt_id_path = Column(String(255), nullable=True) # ✅ NEW
+    
     # Status
     is_active = Column(Boolean, default=True)
+    profile_completed = Column(Boolean, default=False) # ✅ NEW
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -114,9 +121,10 @@ class Complaint(Base):
     audio_duration = Column(Integer, nullable=True)  # in seconds
     
     # Phase 4: Location Tracking
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    location_address = Column(String(500), nullable=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    location_address = Column(String(500), nullable=False)
+    incident_location = Column(String(500), nullable=False) # Manual location from user
     
     # User selection
     selected_department = Column(String(50), nullable=False)
@@ -181,6 +189,24 @@ class ComplaintRating(Base):
     complaint = relationship("Complaint", back_populates="rating")
     user = relationship("User")
     officer = relationship("Officer", back_populates="ratings_received")
+
+
+class UserReport(Base):
+    """
+    Tracking reports against users by officers
+    Automatic suspension happens after 5 unique reports
+    """
+    __tablename__ = "user_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    officer_id = Column(Integer, ForeignKey("officers.id"), nullable=False)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="reports_received")
+    officer = relationship("Officer")
 
 
 class ComplaintUpdate(Base):

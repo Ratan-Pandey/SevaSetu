@@ -98,13 +98,20 @@ Grievance Intelligence System/
     flutter run
     ```
 
-## 🧑‍💻 Contributing
+## 🌐 Production Deployment
 
-We welcome contributions! Whether it's a bug fix, a new feature, or improved documentation, please feel free to open a Pull Request.
+For production deployment (e.g., Render, Railway, or AWS), you must configure the following environment variables:
 
-## 📄 License
+### Backend Environment Variables
+| Variable | Description | Example |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | PostgreSQL Connection String | `postgresql://user:pass@db.xxxx.supabase.co:5432/postgres` |
+| `BASE_URL` | Public URL of your backend | `https://seva-setu-api.onrender.com` |
+| `FIREBASE_SERVICE_ACCOUNT` | (Optional) Content of your service account JSON | `{"type": "service_account", ...}` |
+| `SECRET_KEY` | Secret for JWT Token generation | `your-random-secret-string` |
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Frontend Build
+Before building the Flutter web dashboards, update the `baseUrl` in `lib/services/api_service.dart` to your production backend URL.
 
 ---
 *Built with ❤️ for the future of intelligent governance.*

@@ -55,11 +55,12 @@ __pycache__/
 *.pyd
 .env
 *.sqlite3
+*.db
 
 # ==============================
 # ML Models / Large Files
 # ==============================
-*.pkl
+# *.pkl
 *.joblib
 *.h5
 *.pt

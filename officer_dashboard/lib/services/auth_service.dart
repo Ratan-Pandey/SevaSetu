@@ -22,26 +22,43 @@ class AuthService extends ChangeNotifier {
 
       final apiService = ApiService();
       final response = await apiService.officerLogin(email, password);
+      print("🔥 LOGIN RESPONSE: $response");
 
       if (response != null) {
+        print("✅ Response not null");
+        if (response['access_token'] != null) {
+          print("✅ TOKEN FOUND");
+        } else {
+          print("❌ TOKEN MISSING");
+        }
+      } else {
+        print("❌ RESPONSE NULL");
+      }
+
+      if (response != null && response['access_token'] != null) {
+        print("✅ TOKEN FOUND");
         _officerData = response;
         
         // Save to local storage
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('officer_id', response['user_id']);
+        await prefs.setString('token', response['access_token']);
+        await prefs.setInt('officer_id', response['officer_id']);
         await prefs.setString('email', response['email']);
         await prefs.setString('name', response['name']);
         await prefs.setString('department', response['department'] ?? '');
         
         _isLoading = false;
         notifyListeners();
+        print("🚀 RETURNING TRUE");
         return true;
       }
 
+      print("❌ RETURNING FALSE");
       _isLoading = false;
       notifyListeners();
       return false;
     } catch (e) {
+      print("❌ LOGIN ERROR: $e");
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -54,9 +71,9 @@ class AuthService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      if (prefs.containsKey('officer_id')) {
+      if (prefs.containsKey('officer_id') && prefs.containsKey('token')) {
         _officerData = {
-          'user_id': prefs.getInt('officer_id'),
+          'officer_id': prefs.getInt('officer_id'), // ✅ FIXED KEY
           'email': prefs.getString('email'),
           'name': prefs.getString('name'),
           'department': prefs.getString('department'),
@@ -70,7 +87,7 @@ class AuthService extends ChangeNotifier {
 
   /// Get current officer ID
   int? getOfficerId() {
-    return _officerData?['user_id'];
+    return _officerData?['officer_id']; // ✅ FIXED KEY
   }
 
   /// Sign out

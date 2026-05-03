@@ -1,15 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 import '../auth/login_screen.dart';
+import 'edit_profile_screen.dart';
+import 'notifications_screen.dart';
+import 'package:Seva_Setu/screens/user/help_support_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Map<String, dynamic>? _fullUserData;
+  bool _isFetching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  // Future to manually reload profile if needed
+  Future<void> _loadProfile() async {
+    if (_isFetching) return;
+    
+    setState(() => _isFetching = true);
+    
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final userId = authService.getUserId();
+      
+      if (userId != null) {
+        final data = await apiService.getUserProfile(userId);
+        if (data != null && mounted) {
+          setState(() {
+            _fullUserData = data;
+          });
+          print("🔥 FULL USER DATA: $_fullUserData");
+        }
+      }
+      
+      // Also trigger loadUserData from AuthService to keep it in sync
+      await authService.loadUserData();
+    } catch (e) {
+      print("Error loading profile: $e");
+    } finally {
+      if (mounted) setState(() => _isFetching = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
-    final userData = authService.userData;
+    // Prefer full data from API, but fallback to auth service caches
+    final userData = _fullUserData ?? authService.userData;
+    
     final userName = userData?['name'] ?? 'User';
     final userEmail = userData?['email'] ?? '';
 
@@ -54,7 +104,7 @@ class ProfileScreen extends StatelessWidget {
                         radius: 50,
                         backgroundColor: Colors.white,
                         child: Text(
-                          userName[0].toUpperCase(),
+                          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                           style: const TextStyle(
                             fontSize: 40,
                             fontWeight: FontWeight.bold,
@@ -66,14 +116,16 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // Name
-                    Text(
-                      userName,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+                    _isFetching && _fullUserData == null
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(
+                          userName,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                     const SizedBox(height: 8),
 
                     // Email
@@ -166,8 +218,8 @@ class ProfileScreen extends StatelessWidget {
                               _buildInfoTile(
                                 Icons.verified_user_outlined,
                                 'Status',
-                                'Verified',
-                                const Color(0xFF66BB6A),
+                                userData?['profile_completed'] == true ? 'Verified' : 'Pending',
+                                userData?['profile_completed'] == true ? const Color(0xFF66BB6A) : Colors.orange,
                               ),
                             ],
                           ),
@@ -190,13 +242,18 @@ class ProfileScreen extends StatelessWidget {
                           'Edit Profile',
                           'Update your personal information',
                           const Color(0xFF667eea),
-                          () {
-                            // TODO: Navigate to edit profile
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Edit profile coming soon!'),
+                          () async {
+                            // 🔥 PASS FULL DATA TO EDIT SCREEN
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditProfileScreen(initialData: userData),
                               ),
                             );
+
+                            if (result == true) {
+                              _loadProfile(); // 🔥 reload user data
+                            }
                           },
                         ),
                         const SizedBox(height: 12),
@@ -208,12 +265,15 @@ class ProfileScreen extends StatelessWidget {
                           'Manage your notification preferences',
                           const Color(0xFFFFA726),
                           () {
-                            // TODO: Navigate to notifications settings
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Notification settings coming soon!'),
-                              ),
-                            );
+                            final userId = authService.getUserId();
+                            if (userId != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => NotificationsScreen(userId: userId),
+                                ),
+                              );
+                            }
                           },
                         ),
                         const SizedBox(height: 12),
@@ -225,22 +285,9 @@ class ProfileScreen extends StatelessWidget {
                           'Get help with your complaints',
                           const Color(0xFF42A5F5),
                           () {
-                            showDialog(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Help & Support'),
-                                content: const Text(
-                                  'For support, please contact:\n\n'
-                                  'Email: support@grievance.com\n'
-                                  'Phone: +91 1234567890',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Close'),
-                                  ),
-                                ],
-                              ),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => HelpSupportScreen()),
                             );
                           },
                         ),

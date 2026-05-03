@@ -177,12 +177,6 @@ class _ComplaintSuccessScreenState extends State<ComplaintSuccessScreen>
                                 ),
                                 const Divider(height: 32),
                                 _buildInfoRow(
-                                  'AI Category',
-                                  widget.complaintData['ai_category'] ?? 'N/A',
-                                  Icons.category,
-                                ),
-                                const Divider(height: 32),
-                                _buildInfoRow(
                                   'AI Urgency',
                                   widget.complaintData['ai_urgency'] ?? 'N/A',
                                   Icons.flag,

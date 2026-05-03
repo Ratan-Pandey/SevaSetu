@@ -194,12 +194,59 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
                       fontSize: 16,
                     ),
                   ),
-                  Text(
-                    _getTimeAgo(complaint['created_at']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        _getTimeAgo(complaint['created_at']),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      if (complaint['status'] == 'submitted')
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 0),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () => _handleCancel(complaint),
+                            child: const Text(
+                              "Cancel",
+                              style: TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        )
+                      else if (complaint['status'] != 'closed_by_user' &&
+                          complaint['status'] != 'cancelled' &&
+                          complaint['status'] != 'closed' &&
+                          complaint['status'] != 'resolved')
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 0),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () => _handleFinish(complaint),
+                            child: const Text(
+                              "Finish",
+                              style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -242,6 +289,9 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
     Color color;
 
     switch (priority) {
+      case "Critical":
+        color = const Color(0xFFB71C1C); // Deep Red
+        break;
       case "High":
         color = Colors.red;
         break;
@@ -274,6 +324,8 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
 
     switch (status) {
       case "resolved":
+      case "closed":
+      case "closed_by_user":
         color = Colors.green;
         break;
       case "in_progress":
@@ -281,6 +333,9 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
         break;
       case "under_review":
         color = Colors.blue;
+        break;
+      case "cancelled":
+        color = Colors.red;
         break;
       default:
         color = Colors.grey;
@@ -352,6 +407,74 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
       return 'Just now';
     } catch (e) {
       return 'Recently';
+    }
+  }
+
+  Future<void> _handleCancel(Map<String, dynamic> complaint) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final apiService = Provider.of<ApiService>(context, listen: false);
+    final userId = authService.getUserId();
+    if (userId == null) return;
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Cancel Complaint"),
+        content: const Text("Are you sure you want to cancel this complaint?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("No")),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Yes, Cancel",
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await apiService.cancelComplaint(complaint['id'], userId);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Complaint cancelled")),
+        );
+        _loadComplaints();
+      }
+    }
+  }
+
+  Future<void> _handleFinish(Map<String, dynamic> complaint) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final apiService = Provider.of<ApiService>(context, listen: false);
+    final userId = authService.getUserId();
+    if (userId == null) return;
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Finish Complaint"),
+        content: const Text("Has your issue been resolved to your satisfaction?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Not Yet")),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Yes, Finish",
+                  style: TextStyle(color: Colors.green))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await apiService.finishComplaint(complaint['id'], userId);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Thank you! Complaint closed.")),
+        );
+        _loadComplaints();
+      }
     }
   }
 }

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/splash_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/officer_dashboard.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
+import 'services/socket_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const OfficerDashboardApp());
@@ -17,6 +20,7 @@ class OfficerDashboardApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         Provider(create: (_) => ApiService()),
+        Provider(create: (_) => SocketService(serverUrl: 'http://127.0.0.1:8000')),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -65,8 +69,52 @@ class OfficerDashboardApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const SplashScreen(),
+        home: const AuthWrapper(),
       ),
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isLoading = true;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    checkLogin();
+  }
+
+  Future<void> checkLogin() async {
+    // Disabled auto-login as per request
+    // final authService = Provider.of<AuthService>(context, listen: false);
+    // await authService.loadOfficerData();
+    
+    if (mounted) {
+      setState(() { 
+        _isLoggedIn = false; // authService.isAuthenticated; 
+        _isLoading = false; 
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return _isLoggedIn
+        ? const OfficerDashboard()   // ✅ logged in
+        : const LoginScreen();       // ✅ not logged in
   }
 }

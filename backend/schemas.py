@@ -2,7 +2,7 @@
 Pydantic schemas for request/response validation
 """
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 
 
@@ -32,6 +32,15 @@ class OfficerCreate(BaseModel):
     password: str
     employee_id: str
     department: str
+
+
+class OfficerCreateMinimal(BaseModel):
+    """Admin creates officer with just login ID and password"""
+    name: str
+    email: EmailStr
+    employee_id: str
+    department: str
+    password: str
 
 
 class AuthResponse(BaseModel):
@@ -83,9 +92,10 @@ class ComplaintSubmit(BaseModel):
     """Submit new complaint"""
     text: str
     selected_department: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    location_address: Optional[str] = None
+    latitude: float
+    longitude: float
+    location_address: str
+    incident_location: str # Manual location from user (Compulsory)
 
 
 class ComplaintResponse(BaseModel):
@@ -106,11 +116,24 @@ class ComplaintResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_address: Optional[str] = None
+    incident_location: Optional[str] = None
     created_at: datetime
 
 
+class ComplaintUpdateDetail(BaseModel):
+    """Update detail for timeline"""
+    id: int
+    update_text: str
+    status_changed_from: Optional[str]
+    status_changed_to: Optional[str]
+    officer_name: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class ComplaintDetail(BaseModel):
-    """Detailed complaint with updates"""
+    """Detailed complaint with updates and location"""
     id: int
     tracking_id: str
     text: str
@@ -120,12 +143,19 @@ class ComplaintDetail(BaseModel):
     delay_risk_label: Optional[str]
     delay_risk_score: Optional[float]
     status: str
-    assigned_officer_name: Optional[str]
+    assigned_officer_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_address: Optional[str] = None
+    incident_location: Optional[str] = None
     created_at: datetime
-    updates: list
+    resolved_at: Optional[datetime] = None
+    updates: List[ComplaintUpdateDetail] = []
+    user_name: Optional[str] = None
+    user_phone: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 # ===== RATING SCHEMAS =====
@@ -149,6 +179,15 @@ class ComplaintUpdateRequest(BaseModel):
     """Officer update on complaint"""
     update_text: str
     new_status: Optional[str] = None
+
+
+class OfficerProfileUpdate(BaseModel):
+    """Officer profile completion"""
+    name: str
+    department: str
+    phone_number: Optional[str] = None
+    designation: Optional[str] = None
+    govt_id_path: Optional[str] = None
 
 
 class OfficerDashboardStats(BaseModel):

@@ -30,6 +30,16 @@ dependencies:
   # Data Tables
   data_table_2: ^2.5.12
 
+  # Real-time
+  socket_io_client: ^2.0.3
+  url_launcher: ^6.2.5
+
+  # Maps
+  flutter_map: ^7.0.0
+  latlong2: ^0.9.1
+  flutter_map_cancellable_tile_provider: ^3.0.2
+  flutter_map_heatmap: ^0.0.8
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -15,10 +15,6 @@ class ProfileScreen extends StatelessWidget {
     final department = officerData?['department'] ?? 'N/A';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        automaticallyImplyLeading: false,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -74,9 +70,12 @@ class ProfileScreen extends StatelessWidget {
                       children: [
                         const Icon(Icons.email, color: Colors.white, size: 16),
                         const SizedBox(width: 8),
-                        Text(
-                          officerEmail,
-                          style: const TextStyle(color: Colors.white),
+                        Flexible(
+                          child: Text(
+                            officerEmail,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ),
                       ],
                     ),

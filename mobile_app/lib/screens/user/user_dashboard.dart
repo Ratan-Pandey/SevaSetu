@@ -8,6 +8,7 @@ import 'my_complaints_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import '../../services/notification_service.dart';
+import '../../services/socket_service.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -23,10 +24,13 @@ class _UserDashboardState extends State<UserDashboard> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
+    final notificationService = Provider.of<NotificationService>(context);
     final userId = authService.getUserId() ?? 0;
 
     final List<Widget> screens = [
-      const DashboardHome(),
+      DashboardHome(onTabChange: (index) {
+        if (mounted) setState(() => _currentIndex = index);
+      }),
       const MyComplaintsScreen(),
       NotificationsScreen(userId: userId),
       const ProfileScreen(),
@@ -53,23 +57,31 @@ class _UserDashboardState extends State<UserDashboard> {
           elevation: 0,
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFF667eea).withOpacity(0.2),
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home, color: Color(0xFF667eea)),
               label: 'Home',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.list_alt_outlined),
               selectedIcon: Icon(Icons.list_alt, color: Color(0xFF667eea)),
               label: 'Complaints',
             ),
             NavigationDestination(
-              icon: Icon(Icons.notifications_outlined),
-              selectedIcon: Icon(Icons.notifications, color: Color(0xFF667eea)),
+              icon: Badge(
+                label: Text(notificationService.unreadCount.toString()),
+                isLabelVisible: notificationService.unreadCount > 0,
+                child: const Icon(Icons.notifications_outlined),
+              ),
+              selectedIcon: Badge(
+                label: Text(notificationService.unreadCount.toString()),
+                isLabelVisible: notificationService.unreadCount > 0,
+                child: const Icon(Icons.notifications, color: Color(0xFF667eea)),
+              ),
               label: 'Notifications',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person, color: Color(0xFF667eea)),
               label: 'Profile',
@@ -82,7 +94,8 @@ class _UserDashboardState extends State<UserDashboard> {
 }
 
 class DashboardHome extends StatefulWidget {
-  const DashboardHome({super.key});
+  final Function(int)? onTabChange;
+  const DashboardHome({super.key, this.onTabChange});
 
   @override
   State<DashboardHome> createState() => _DashboardHomeState();
@@ -94,6 +107,7 @@ class _DashboardHomeState extends State<DashboardHome> {
   Map<String, dynamic> _stats = {'total': 0, 'active': 0, 'resolved': 0};
   bool _isLoading = true;
   Timer? _refreshTimer;
+  StreamSubscription? _socketSubscription;
 
   @override
   void initState() {
@@ -101,26 +115,36 @@ class _DashboardHomeState extends State<DashboardHome> {
     _loadStats();
     _initNotifications();
     
-    // Auto-refresh every 10 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _loadStats();
-    });
+    // Auto-refresh every 10 seconds - TEMPORARILY DISABLED to prevent backend spam
+    // _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    //   _loadStats();
+    // });
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _socketSubscription?.cancel();
     super.dispose();
   }
-
   Future<void> _initNotifications() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final apiService = Provider.of<ApiService>(context, listen: false);
     final notificationService = Provider.of<NotificationService>(context, listen: false);
+    final socketService = Provider.of<SocketService>(context, listen: false);
     
     final userId = authService.getUserId();
     if (userId != null) {
-      await notificationService.initialize(userId, apiService);
+      socketService.connect(userId);
+      await notificationService.initialize(userId, apiService, socketService);
+      
+      // Listen for any notification to refresh stats
+      _socketSubscription = socketService.notifications.listen((data) {
+        if (mounted) {
+          print("🔔 [USER-DASHBOARD] Refreshing stats due to new notification");
+          _loadStats();
+        }
+      });
     }
   }
 
@@ -315,24 +339,30 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   );
                                 },
                                 borderRadius: BorderRadius.circular(20),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(
-                                      Icons.add_circle_outline,
-                                      color: Colors.white,
-                                      size: 28,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(
+                                          Icons.add_circle_outline,
+                                          color: Colors.white,
+                                          size: 28,
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'Submit New Complaint',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Submit New Complaint',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),

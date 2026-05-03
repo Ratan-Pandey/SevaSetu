@@ -18,20 +18,33 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1)); // Reduced delay for faster testing
     if (!mounted) return;
     
     final authService = Provider.of<AuthService>(context, listen: false);
     await authService.loadAdminData();
     if (!mounted) return;
-    
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => authService.isAuthenticated
-            ? const AdminDashboard()
-            : const LoginScreen(),
-      ),
-    );
+
+    if (authService.isAuthenticated) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AdminDashboard()),
+      );
+      return;
+    }
+
+    // Auto-login for testing phase
+    bool success = await authService.login('admin@test.com', 'admin123');
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AdminDashboard()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override

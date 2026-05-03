@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -94,11 +95,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
 
     try {
-      // Upload Aadhaar image logic (simulated for now, path would come from backend)
       String? aadhaarPath;
       if (_aadhaarImage != null) {
-        // In a real app, we'd upload this file via ApiService and get a path back
-        // For now, we'll proceed with the metadata
+        aadhaarPath = await apiService.uploadAadhaarImage(_aadhaarImage!);
+        if (aadhaarPath == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            _buildSnackBar('Failed to upload Aadhaar image', Colors.red),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
       }
 
       final result = await apiService.updateProfile(userId, {
@@ -108,26 +114,27 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         'pincode': _pincodeController.text.trim(),
         'city': _cityController.text.trim(),
         'state': _stateController.text.trim(),
-        'dob': _selectedDOB?.toIso8601String(), // ✅ NEW
-        'aadhaar_number': _aadhaarController.text.trim(), // ✅ NEW
-        'aadhaar_image_path': aadhaarPath, // ✅ NEW
-        'profile_completed': true,
+        'dob': _selectedDOB?.toIso8601String().split('T')[0], // ✅ Date only
+        'aadhaar_number': _aadhaarController.text.trim(),
+        'aadhaar_image_path': aadhaarPath,
       });
 
       if (!mounted) return;
 
-      if (result != null) {
+      if (result != null && result.containsKey('id')) {
         authService.updateProfileStatus(true);
         ScaffoldMessenger.of(context).showSnackBar(
           _buildSnackBar('Profile saved successfully!', Colors.green),
         );
         await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const UserDashboard()),
+          (route) => false,
         );
       } else {
+        final errorMsg = result?['detail'] ?? 'Failed to save profile';
         ScaffoldMessenger.of(context).showSnackBar(
-          _buildSnackBar('Failed to save profile', Colors.red),
+          _buildSnackBar(errorMsg, Colors.red),
         );
         setState(() => _isLoading = false);
       }
@@ -293,7 +300,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   child: kIsWeb
                                       ? Image.network(_aadhaarImage!.path, height: 150, width: double.infinity, fit: BoxFit.cover)
-                                      : Image.network(_aadhaarImage!.path, height: 150, width: double.infinity, fit: BoxFit.cover), // path is fine on mobile too for XFile
+                                      : Image.file(
+                                          File(_aadhaarImage!.path),
+                                          height: 150,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(

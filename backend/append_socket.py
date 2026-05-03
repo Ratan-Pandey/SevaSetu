@@ -1,0 +1,10 @@
+with open('websocket_server.py', 'a', encoding='utf-8') as f:
+    f.write("\n\nasync def broadcast_dashboard_update():\n")
+    f.write("    \"\"\"Helper to notify the admin dashboard that data has changed\"\"\"\n")
+    f.write("    from datetime import datetime, timezone\n")
+    f.write("    print(\"📡 [SOCKET] Broadcasting 'dashboard_update' event to all listeners\")\n")
+    f.write("    try:\n")
+    f.write("        await sio.emit('dashboard_update', {'timestamp': datetime.now(timezone.utc).isoformat()})\n")
+    f.write("        print(\"✅ [SOCKET] Successfully broadcasted 'dashboard_update'\")\n")
+    f.write("    except Exception as e:\n")
+    f.write("        print(f\"❌ [SOCKET] Error broadcasting 'dashboard_update': {e}\")\n")

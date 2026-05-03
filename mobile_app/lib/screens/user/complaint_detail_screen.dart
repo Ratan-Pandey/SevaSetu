@@ -184,12 +184,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                           _data!['complaint']['status'] ?? 'N/A',
                                           _getStatusColor(_data!['complaint']['status']),
                                         ),
-                                        const Divider(height: 24),
-                                        _buildInfoRow(
-                                          'Category',
-                                          _data!['complaint']['ai_category'] ?? 'N/A',
-                                          const Color(0xFF667eea),
-                                        ),
+
                                         const Divider(height: 24),
                                         _buildInfoRow(
                                           'Urgency',
@@ -437,6 +432,50 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                         ),
                                     ],
                                   ),
+                                  const SizedBox(height: 10),
+
+                                  // Close/Cancel Buttons
+                                  if (_data!['complaint']['status'] != "closed_by_user" && 
+                                      _data!['complaint']['status'] != "cancelled" &&
+                                      _data!['complaint']['status'] != "resolved")
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 20),
+                                      child: Row(
+                                        children: [
+                                          // Cancel Button (Only if submitted)
+                                          if (_data!['complaint']['status'] == "submitted")
+                                            Expanded(
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(right: 8),
+                                                child: ElevatedButton(
+                                                  onPressed: () => _handleCancel(),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.red.shade50,
+                                                    foregroundColor: Colors.red,
+                                                    side: BorderSide(color: Colors.red.shade200),
+                                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                                  ),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                              ),
+                                            ),
+                                          
+                                          // Finish/Close Button
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              onPressed: () => _handleFinish(),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green.shade50,
+                                                foregroundColor: Colors.green,
+                                                side: BorderSide(color: Colors.green.shade200),
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                              child: const Text('Mark as Finished'),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
 
                                   // Audio Evidence
                                   if (_data!['complaint']['audio_path'] != null) ...[
@@ -482,7 +521,8 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                                     if (_isPlaying) {
                                                       await _audioPlayer.pause();
                                                     } else {
-                                                      final url = 'http://127.0.0.1:8000/${_data!['complaint']['audio_path']}';
+                                                      final apiService = Provider.of<ApiService>(context, listen: false);
+                                                      final url = '${ApiService.baseUrl}/${_data!['complaint']['audio_path']}';
                                                       await _audioPlayer.play(UrlSource(url));
                                                     }
                                                   },
@@ -550,7 +590,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                           ClipRRect(
                                             borderRadius: BorderRadius.circular(12),
                                             child: Image.network(
-                                              'http://10.0.2.2:8000/${_data!['complaint']['image_path']}',
+                                              '${ApiService.baseUrl}/${_data!['complaint']['image_path']}',
                                               width: double.infinity,
                                               fit: BoxFit.cover,
                                               errorBuilder: (context, error, stackTrace) =>
@@ -802,6 +842,66 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
             )
           : null,
     );
+  }
+
+  Future<void> _handleFinish() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Finish Complaint?'),
+        content: const Text('Are you sure the issue is resolved and you want to close this complaint?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Finish')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final userId = authService.getUserId();
+      
+      if (userId != null) {
+        final success = await apiService.finishComplaint(widget.complaintId, userId);
+        if (success) {
+          _loadDetail();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Complaint marked as finished.')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleCancel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Complaint?'),
+        content: const Text('Are you sure you want to cancel this complaint?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Cancel')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final userId = authService.getUserId();
+      
+      if (userId != null) {
+        final success = await apiService.cancelComplaint(widget.complaintId, userId);
+        if (success) {
+          _loadDetail();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Complaint cancelled.')),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _showRatingDialog() async {

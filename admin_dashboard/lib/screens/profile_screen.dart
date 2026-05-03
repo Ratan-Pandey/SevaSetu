@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
+import 'system_settings_screen.dart';
+import '../services/api_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -134,10 +137,17 @@ class ProfileScreen extends StatelessWidget {
               Icons.download,
               'Export System Report',
               'Download complete analytics',
-              () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Export feature coming soon!')),
-                );
+              () async {
+                const url = '${ApiService.baseUrl}/admin/export/complaints';
+                if (await canLaunchUrl(Uri.parse(url))) {
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not launch export URL')),
+                    );
+                  }
+                }
               },
             ),
             const SizedBox(height: 12),
@@ -147,8 +157,9 @@ class ProfileScreen extends StatelessWidget {
               'System Settings',
               'Configure system parameters',
               () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings feature coming soon!')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SystemSettingsScreen()),
                 );
               },
             ),

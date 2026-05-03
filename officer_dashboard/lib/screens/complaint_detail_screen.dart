@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'package:intl/intl.dart';
 import 'chat_screen.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'user_profile_screen.dart';
 
 class ComplaintDetailScreen extends StatefulWidget {
   final int complaintId;
@@ -78,8 +79,17 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
   }
 
   Future<void> _updateStatus(String status) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
     final apiService = Provider.of<ApiService>(context, listen: false);
     final comment = _commentController.text.trim();
+    final officerId = authService.getOfficerId();
+
+    if (officerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Officer ID not found. Please re-login.')),
+      );
+      return;
+    }
 
     if (comment.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,7 +98,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
       return;
     }
 
-    final success = await apiService.updateComplaint(widget.complaintId, status, comment);
+    final success = await apiService.updateComplaint(widget.complaintId, status, comment, officerId);
 
     if (!mounted) return;
 
@@ -149,6 +159,15 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text('Mark Resolved'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _updateStatus('rejected');
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Reject Complaint'),
             ),
           ],
         ),
@@ -225,6 +244,37 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // User Info Card
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFF1e3a8a),
+                            child: Icon(Icons.person, color: Colors.white),
+                          ),
+                          title: Text(
+                            _data!['complaint']['user_name'] ?? 'Citizen', 
+                            style: const TextStyle(fontWeight: FontWeight.bold)
+                          ),
+                          subtitle: const Text('Complaint filed by'),
+                          trailing: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => UserProfileScreen(
+                                    userId: _data!['complaint']['user_id'],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('View Profile'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
                       // Description
                       Card(
                         child: Padding(
@@ -276,7 +326,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                           if (_isPlaying) {
                                             await _audioPlayer.pause();
                                           } else {
-                                            final url = 'http://127.0.0.1:8000/${_data!['complaint']['audio_path']}';
+                                            final url = '${ApiService.baseUrl}/${_data!['complaint']['audio_path']}';
                                             await _audioPlayer.play(UrlSource(url));
                                           }
                                         },
@@ -326,7 +376,7 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.network(
-                                    'http://10.0.2.2:8000/${_data!['complaint']['image_path']}',
+                                    '${ApiService.baseUrl}/${_data!['complaint']['image_path']}',
                                     width: double.infinity,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) =>
@@ -364,7 +414,10 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                                     const Icon(Icons.location_on, color: Colors.red, size: 20),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text(_data!['complaint']['location_address']),
+                                      child: Text(
+                                        _data!['complaint']['location_address'],
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -384,13 +437,35 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
                           _data!['complaint']['location_address'].toString().isNotEmpty)
                         const SizedBox(height: 16),
 
-                      // Actions
 
-                      ElevatedButton(
-                        onPressed: _showUpdateDialog,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        child: const Text('Update Status'),
-                      ),
+                      // Actions
+                      if (_data!['complaint']['status'] != "closed_by_user" && 
+                          _data!['complaint']['status'] != "cancelled" &&
+                          _data!['complaint']['status'] != "resolved")
+                        ElevatedButton(
+                          onPressed: _showUpdateDialog,
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                          child: const Text('Update Status'),
+                        ),
+                      
+                      if (_data!['complaint']['status'] == "closed_by_user")
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            "This complaint has been closed by the user.",
+                            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      if (_data!['complaint']['status'] == "cancelled")
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            "This complaint was cancelled by the user.",
+                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -413,16 +488,72 @@ class _ComplaintDetailScreenState extends State<ComplaintDetailScreen> {
           : null,
     );
   }
-
   Widget _buildInfoRow(String label, String value) {
+    String displayValue = value;
+    if (label == 'Status') {
+      displayValue = value.replaceAll('_', ' ').toUpperCase();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: Colors.grey.shade600)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              displayValue,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: label == 'Status' ? _getStatusColor(value) : Colors.black,
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'submitted':
+        return Colors.blue;
+      case 'under_review':
+        return Colors.orange;
+      case 'in_progress':
+        return Colors.purple;
+      case 'resolved':
+        return Colors.green;
+      case 'closed':
+      case 'closed_by_user':
+        return Colors.grey;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.blue;
+    }
+  }
+
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(10),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              child: Image.network(imageUrl),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 30),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
       ),
     );
   }

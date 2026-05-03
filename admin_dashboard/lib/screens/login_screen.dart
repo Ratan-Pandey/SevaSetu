@@ -23,13 +23,17 @@ class _LoginScreenState extends State<LoginScreen> {
     final authService = Provider.of<AuthService>(context, listen: false);
     final success = await authService.login(_emailController.text.trim(), _passwordController.text);
 
+    print("LOGIN SUCCESS: $success");
+
     if (!mounted) return;
 
     if (success) {
+      print("🚀 NAVIGATING");
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const AdminDashboard()),
       );
     } else {
+      print("❌ LOGIN FAILED UI");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid credentials'), backgroundColor: Colors.red),
       );

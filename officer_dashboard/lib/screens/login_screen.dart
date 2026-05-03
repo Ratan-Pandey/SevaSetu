@@ -28,13 +28,17 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
+    print("LOGIN SUCCESS: $success");
+
     if (!mounted) return;
 
     if (success) {
+      print("🚀 NAVIGATING");
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const OfficerDashboard()),
       );
     } else {
+      print("❌ LOGIN FAILED UI");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -269,6 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: const [
@@ -285,26 +290,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: const [
-                            Icon(Icons.email, color: Colors.white70, size: 16),
-                            SizedBox(width: 8),
-                            Text(
-                              'officer@test.com',
-                              style: TextStyle(color: Colors.white, fontSize: 13),
-                            ),
-                          ],
+                        const Text(
+                          'Vigilance Department:',
+                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const Text(
+                          'Email: corruption@test.com | Pwd: corruption123',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: const [
-                            Icon(Icons.lock, color: Colors.white70, size: 16),
-                            SizedBox(width: 8),
-                            Text(
-                              'password123',
-                              style: TextStyle(color: Colors.white, fontSize: 13),
-                            ),
-                          ],
+                        const Text(
+                          'Power Department:',
+                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const Text(
+                          'Email: officer@test.com | Pwd: password123',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
                         ),
                       ],
                     ),

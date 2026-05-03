@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'auth_service.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000'; // ⚡ FIXED: Use static const and IP for reliability
+  static const String baseUrl = 'http://127.0.0.1:8000'; // ⚡ FINAL FIX: Use IP for web reliability
 
   // For Android Emulator:
   // static const String baseUrl = 'http://10.0.2.2:8000';
@@ -48,12 +50,75 @@ class ApiService {
         body: jsonEncode(profileData),
       );
 
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return decoded;
+      } else {
+        print('Update profile error (${response.statusCode}): ${decoded['detail']}');
+        return decoded; // Return error map containing 'detail'
+      }
+    } catch (e) {
+      print('Update profile error: $e');
+      return null;
+    }
+  }
+
+  /// Upload Aadhaar image (Cross-Platform)
+  Future<String?> uploadAadhaarImage(XFile imageFile) async {
+    try {
+      print("📤 Uploading Aadhaar image...");
+      
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/upload/image'), // Re-using general image upload
+      );
+
+      if (kIsWeb) {
+        final bytes = await imageFile.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: imageFile.name,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            imageFile.path,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+      }
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final data = jsonDecode(respStr);
+        return data['file_path'];
+      }
+      return null;
+    } catch (e) {
+      print('Upload Aadhaar error: $e');
+      return null;
+    }
+  }
+
+  /// Get user profile
+  Future<Map<String, dynamic>?> getUserProfile(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/profile/$userId'),
+      );
+
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
       return null;
     } catch (e) {
-      print('Update profile error: $e');
+      print('Get user profile error: $e');
       return null;
     }
   }
@@ -144,27 +209,74 @@ class ApiService {
     }
   }
 
+  /// Cancel a complaint (soft delete)
+  Future<bool> cancelComplaint(int complaintId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/complaints/$complaintId/cancel?user_id=$userId'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Cancel error: $e");
+      return false;
+    }
+  }
+
+  /// Finish a complaint (close by user)
+  Future<bool> finishComplaint(int complaintId, int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/complaints/$complaintId/finish?user_id=$userId'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Finish error: $e");
+      return false;
+    }
+  }
+
   // ============================================================================
   // PHASE 4: IMAGE UPLOAD
   // ============================================================================
 
-  /// Upload image for a complaint
-  Future<bool> uploadComplaintImage(int complaintId, File imageFile) async {
+  /// Upload image for a complaint (Cross-Platform)
+  Future<bool> uploadComplaintImage(int complaintId, XFile imageFile) async {
     try {
+      print("📤 Uploading image for complaint: $complaintId");
+      
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/complaints/$complaintId/upload-image'),
       );
 
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          imageFile.path,
-          contentType: MediaType('image', 'jpeg'),
-        ),
-      );
+      // ✅ ADD AUTHORIZATION HEADER
+      String? token = await AuthService().getFirebaseToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      if (kIsWeb) {
+        final bytes = await imageFile.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: imageFile.name,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            imageFile.path,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+      }
 
       final response = await request.send();
+      print("✅ Upload image response: ${response.statusCode}");
       return response.statusCode == 200;
     } catch (e) {
       print('Upload image error: $e');
@@ -194,23 +306,44 @@ class ApiService {
   // PHASE 4: AUDIO UPLOAD
   // ============================================================================
 
-  /// Upload audio for a complaint
-  Future<bool> uploadComplaintAudio(int complaintId, File audioFile) async {
+  /// Upload audio for a complaint (Cross-Platform)
+  Future<bool> uploadComplaintAudio(int complaintId, XFile audioFile) async {
     try {
+      print("📤 Uploading audio for complaint: $complaintId");
+
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/complaints/$complaintId/upload-audio'),
       );
 
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          audioFile.path,
-          contentType: MediaType('audio', 'm4a'),
-        ),
-      );
+      // ✅ ADD AUTHORIZATION HEADER
+      String? token = await AuthService().getFirebaseToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      if (kIsWeb) {
+        final bytes = await audioFile.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: audioFile.name,
+            contentType: MediaType('audio', 'm4a'),
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            audioFile.path,
+            contentType: MediaType('audio', 'm4a'),
+          ),
+        );
+      }
 
       final response = await request.send();
+      print("✅ Upload audio response: ${response.statusCode}");
       return response.statusCode == 200;
     } catch (e) {
       print('Upload audio error: $e');
@@ -218,7 +351,7 @@ class ApiService {
     }
   }
 
-  /// Get complaint audio URL
+  /// Get complaint audio URLaudio URL
   Future<String?> getComplaintAudio(int complaintId) async {
     try {
       final response = await http.get(
@@ -295,12 +428,31 @@ class ApiService {
   // PHASE 4: REAL-TIME CHAT
   // ============================================================================
 
-  /// Get chat messages for a complaint
-  Future<List<dynamic>?> getChatMessages(int complaintId) async {
+  /// Get chat history for a complaint (Simplified)
+  Future<List<dynamic>?> getChatHistory(int complaintId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/chat/$complaintId/messages'),
+        Uri.parse('$baseUrl/chat/$complaintId'),
       );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Get chat history error: $e');
+      return null;
+    }
+  }
+
+  /// Get chat messages for a complaint
+  Future<List<dynamic>?> getChatMessages(int complaintId, [String? userType]) async {
+    try {
+      final url = userType != null
+          ? '$baseUrl/chat/$complaintId/messages?user_type=$userType'
+          : '$baseUrl/chat/$complaintId/messages';
+          
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);

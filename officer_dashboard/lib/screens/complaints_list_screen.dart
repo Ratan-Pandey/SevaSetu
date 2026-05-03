@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
@@ -20,12 +21,23 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
   String _selectedPriority = "";
   Map<String, dynamic> _stats = {};
   bool _isStatsLoading = true;
+  
+  // Search enhancements
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadComplaints();
     _loadStats();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
  
   Future<void> _loadStats() async {
@@ -50,6 +62,8 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
     if (sortBy != null) _selectedSort = sortBy;
     if (priority != null) _selectedPriority = priority;
 
+    // We don't want to show a FULL transparency loader for search, 
+    // it makes the search bar disappear/lose focus.
     setState(() => _isLoading = true);
  
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -57,19 +71,30 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
     final officerId = authService.getOfficerId();
  
     if (officerId != null) {
+      print("📡 Fetching complaints for officer: $officerId (Search: '$_searchText')");
       final complaints = await apiService.getOfficerComplaints(
         officerId,
         search: _searchText,
         sortBy: _selectedSort,
         priority: _selectedPriority,
       );
+      
       if (mounted) {
         setState(() {
-          _complaints = complaints;
+          _complaints = complaints ?? [];
           _isLoading = false;
         });
       }
+    } else {
+      if (mounted) setState(() { _complaints = []; _isLoading = false; });
     }
+  }
+
+  void _onSearchChanged(String value) {
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      _loadComplaints(search: value);
+    });
   }
 
   List<dynamic> get _filteredComplaints {
@@ -83,91 +108,68 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('All Complaints'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
+      body: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                   _isStatsLoading
-                      ? const Center(child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: CircularProgressIndicator(),
-                        ))
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildStatCard("Total", _stats["total"] ?? 0, Colors.blue),
-                            _buildStatCard("High", _stats["high"] ?? 0, Colors.red),
-                            _buildStatCard("Medium", _stats["medium"] ?? 0, Colors.orange),
-                            _buildStatCard("Low", _stats["low"] ?? 0, Colors.green),
-                          ],
-                        ),
+                  const SizedBox(height: 5), // Reduced space since cards are gone
                   const SizedBox(height: 15),
                   TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
                       hintText: "Search complaints...",
                       prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty 
+                        ? IconButton(
+                            icon: const Icon(Icons.clear), 
+                            onPressed: () {
+                              _searchController.clear();
+                              _onSearchChanged("");
+                            })
+                        : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onChanged: (value) {
-                      _loadComplaints(search: value);
-                    },
+                    onChanged: _onSearchChanged,
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: _selectedSort,
+                    value: _selectedPriority == "" ? "All" : _selectedPriority,
                     decoration: InputDecoration(
-                      labelText: "Sort By",
+                      labelText: "Filter by Priority",
+                      prefixIcon: const Icon(Icons.filter_list),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: "priority", child: Text("Priority")),
-                      DropdownMenuItem(value: "latest", child: Text("Latest")),
-                      DropdownMenuItem(value: "oldest", child: Text("Oldest")),
-                    ],
+                    items: ["All", "Critical", "High", "Medium", "Low"]
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        _loadComplaints(sortBy: value);
+                        _loadComplaints(priority: value == "All" ? "" : value);
                       }
                     },
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildPriorityChip("High", Colors.red),
-                      _buildPriorityChip("Medium", Colors.orange),
-                      _buildPriorityChip("Low", Colors.green),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
                   Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () => _loadComplaints(),
-                      child: _filteredComplaints.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              padding: const EdgeInsets.only(top: 8),
-                              itemCount: _filteredComplaints.length,
-                              itemBuilder: (context, index) {
-                                return _buildComplaintCard(_filteredComplaints[index]);
-                              },
-                            ),
-                    ),
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : RefreshIndicator(
+                            onRefresh: () => _loadComplaints(),
+                            child: _filteredComplaints.isEmpty
+                                ? ListView(
+                                    children: [SizedBox(height: 200, child: _buildEmptyState())],
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    itemCount: _filteredComplaints.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildComplaintCard(_filteredComplaints[index]);
+                                    },
+                                  ),
+                          ),
                   ),
                 ],
               ),
@@ -179,10 +181,12 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
     String priority = complaint['priority_label'] ?? 'Low';
 
     Color priorityColor;
-    if (priority == 'High') {
+    if (priority == 'Critical') {
       priorityColor = Colors.red;
-    } else if (priority == 'Medium') {
+    } else if (priority == 'High') {
       priorityColor = Colors.orange;
+    } else if (priority == 'Medium') {
+      priorityColor = Colors.amber; // Vibrant Yellow
     } else {
       priorityColor = Colors.green;
     }
@@ -211,7 +215,7 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
                   complaintId: complaint['id'],
                 ),
               ),
-            );
+            ).then((_) => _loadComplaints());
           },
           borderRadius: BorderRadius.circular(12),
           child: Padding(
@@ -221,22 +225,25 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1e3a8a).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        complaint['tracking_id'] ?? 'N/A',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1e3a8a),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1e3a8a).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          complaint['tracking_id'] ?? 'N/A',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1e3a8a),
+                          ),
                         ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     _buildStatusChip(complaint['status'] ?? 'submitted'),
                   ],
                 ),
@@ -252,9 +259,12 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
                   children: [
                     Icon(Icons.category, size: 14, color: Colors.grey.shade600),
                     const SizedBox(width: 4),
-                    Text(
-                      complaint['ai_category'] ?? 'N/A',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    Expanded(
+                      child: Text(
+                        complaint['ai_category'] ?? 'N/A',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Icon(Icons.priority_high, size: 14, color: priorityColor),
@@ -278,20 +288,36 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
   }
 
   Widget _buildStatusChip(String status) {
+    final color = _getStatusColor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _getStatusColor(status).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _getStatusColor(status).withOpacity(0.3)),
-      ),
-      child: Text(
-        status.replaceAll('_', ' ').toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: _getStatusColor(status),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.circle,
+            size: 8,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            status.replaceAll('_', ' ').toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -323,6 +349,8 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
       case 'resolved':
         return Colors.green;
       case 'closed':
+      case 'closed_by_user':
+      case 'cancelled':
         return Colors.grey;
       default:
         return Colors.blue;
@@ -340,53 +368,6 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
       default:
         return Colors.grey;
     }
-  }
-
-  Widget _buildStatCard(String label, int count, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
-          children: [
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPriorityChip(String label, Color color) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: _selectedPriority == label,
-      selectedColor: color.withOpacity(0.3),
-      onSelected: (selected) {
-        setState(() {
-          _selectedPriority = selected ? label : "";
-        });
-
-        _loadComplaints(
-          priority: _selectedPriority,
-        );
-      },
-    );
   }
 
   void _showFilterDialog() {

@@ -39,10 +39,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            authService.isAuthenticated
-                ? const OfficerDashboard()
-                : const LoginScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },

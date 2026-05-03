@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
+import 'complaint_detail_screen.dart';
 
 class AllComplaintsScreen extends StatefulWidget {
   const AllComplaintsScreen({super.key});
@@ -12,8 +14,8 @@ class AllComplaintsScreen extends StatefulWidget {
 class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
   List<dynamic>? _complaints;
   bool _isLoading = true;
-  String _filterStatus = 'all';
-  String _filterUrgency = 'all';
+  String _selectedDepartment = 'All';
+  String _selectedPriority = 'All';
 
   @override
   void initState() {
@@ -24,7 +26,8 @@ class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
   Future<void> _loadComplaints() async {
     setState(() => _isLoading = true);
     final apiService = Provider.of<ApiService>(context, listen: false);
-    final complaints = await apiService.getAllComplaints();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final complaints = await apiService.getAllComplaints(token: authService.token);
     if (mounted) {
       setState(() {
         _complaints = complaints;
@@ -35,36 +38,53 @@ class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
 
   List<dynamic> get _filteredComplaints {
     if (_complaints == null) return [];
-    var filtered = _complaints!;
+    var filtered = List<dynamic>.from(_complaints!);
     
-    if (_filterStatus != 'all') {
-      filtered = filtered.where((c) => c['status'] == _filterStatus).toList();
+    if (_selectedDepartment != 'All') {
+      filtered = filtered.where((c) => c['selected_department'] == _selectedDepartment).toList();
     }
-    if (_filterUrgency != 'all') {
-      filtered = filtered.where((c) => c['ai_urgency'] == _filterUrgency).toList();
+    
+    if (_selectedPriority != 'All') {
+      // Check both priority_label and ai_urgency for better match
+      filtered = filtered.where((c) {
+        final p = (c['priority_label'] ?? c['ai_urgency'] ?? 'Low').toString().toLowerCase();
+        return p == _selectedPriority.toLowerCase();
+      }).toList();
     }
     
     return filtered;
   }
 
+  List<String> get _departments {
+    if (_complaints == null || _complaints!.isEmpty) return ['All'];
+    final depts = _complaints!
+        .map((c) => (c['selected_department'] ?? 'Other').toString())
+        .toSet()
+        .toList();
+    depts.sort();
+    return ['All', ...depts];
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Ensure selected values are still valid after data loads
+    final depts = _departments;
+    if (!depts.contains(_selectedDepartment)) {
+      _selectedDepartment = 'All';
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text('All Complaints'),
+        title: const Text('Complaints Archive', style: TextStyle(fontWeight: FontWeight.bold)),
         automaticallyImplyLeading: false,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         actions: [
           IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Export feature coming soon!')),
-              );
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadComplaints,
           ),
         ],
       ),
@@ -72,53 +92,84 @@ class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Filters Row
+                // Filter Section
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: Colors.grey.shade50,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                  ),
                   child: Row(
                     children: [
+                      // Department Dropdown
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.flag, size: 16, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Urgency: ${_filterUrgency == 'all' ? 'All' : _filterUrgency}',
-                                style: const TextStyle(fontSize: 13),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Department", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
                               ),
-                            ],
-                          ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedDepartment,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                                  style: const TextStyle(fontSize: 14, color: Colors.black, fontWeight: FontWeight.w500),
+                                  items: _departments.map((String value) {
+                                    return DropdownMenuItem<String>(
+                                      value: value,
+                                      child: Text(value),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newValue) {
+                                    setState(() => _selectedDepartment = newValue!);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
+                      // Priority Dropdown
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.info, size: 16, color: Colors.grey),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Status: ${_filterStatus == 'all' ? 'All' : _filterStatus}',
-                                style: const TextStyle(fontSize: 13),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Priority", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
                               ),
-                            ],
-                          ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedPriority,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                                  style: const TextStyle(fontSize: 14, color: Colors.black, fontWeight: FontWeight.w500),
+                                  items: <String>['All', 'Critical', 'High', 'Medium', 'Low'].map((String value) {
+                                    return DropdownMenuItem<String>(
+                                      value: value,
+                                      child: Text(value),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newValue) {
+                                    setState(() => _selectedPriority = newValue!);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -162,7 +213,20 @@ class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredComplaints.length,
                           itemBuilder: (context, index) {
-                            return _buildComplaintCard(_filteredComplaints[index]);
+                            final complaint = _filteredComplaints[index];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ComplaintDetailScreen(
+                                      complaintId: complaint['id'],
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: _buildComplaintCard(complaint),
+                            );
                           },
                         ),
                 ),
@@ -285,56 +349,11 @@ class _AllComplaintsScreenState extends State<AllComplaintsScreen> {
 
   Color _getUrgencyColor(String? urgency) {
     switch (urgency?.toLowerCase()) {
+      case 'critical': return Colors.red.shade900;
       case 'high': return Colors.red;
       case 'medium': return Colors.orange;
       case 'low': return Colors.green;
       default: return Colors.grey;
     }
-  }
-
-  void _showFilterDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Filter Complaints'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Urgency:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: ['all', 'High', 'Medium', 'Low'].map((urgency) {
-                return ChoiceChip(
-                  label: Text(urgency),
-                  selected: _filterUrgency == urgency.toLowerCase(),
-                  onSelected: (selected) {
-                    setState(() => _filterUrgency = urgency.toLowerCase());
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            const Text('Status:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: ['all', 'submitted', 'under_review', 'in_progress', 'resolved'].map((status) {
-                return ChoiceChip(
-                  label: Text(status.replaceAll('_', ' ')),
-                  selected: _filterStatus == status,
-                  onSelected: (selected) {
-                    setState(() => _filterStatus = status);
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
